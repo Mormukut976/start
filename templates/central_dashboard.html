@@ -1,0 +1,1383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Central Monitor — All Agents Dashboard</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #060b18;
+            --bg-secondary: #0d1526;
+            --bg-card: #111c32;
+            --bg-card-hover: #162040;
+            --border: #1e2d4a;
+            --border-glow: #2563eb;
+            --text-primary: #e8edf5;
+            --text-secondary: #8494b2;
+            --text-muted: #5a6a88;
+            --accent: #3b82f6;
+            --accent-glow: #60a5fa;
+            --green: #22c55e;
+            --green-glow: #4ade80;
+            --red: #ef4444;
+            --orange: #f97316;
+            --purple: #a855f7;
+            --cyan: #06b6d4;
+            --radius: 16px;
+            --radius-sm: 10px;
+            --shadow: 0 4px 24px rgba(0,0,0,0.4);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* ========== ANIMATED BG ========== */
+        body::before {
+            content: '';
+            position: fixed;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(ellipse at 20% 50%, rgba(59,130,246,0.06) 0%, transparent 50%),
+                        radial-gradient(ellipse at 80% 20%, rgba(168,85,247,0.05) 0%, transparent 50%),
+                        radial-gradient(ellipse at 50% 80%, rgba(6,182,212,0.04) 0%, transparent 50%);
+            animation: bgShift 20s ease-in-out infinite;
+            z-index: 0;
+            pointer-events: none;
+        }
+        @keyframes bgShift {
+            0%, 100% { transform: translate(0, 0) rotate(0deg); }
+            33% { transform: translate(2%, -2%) rotate(1deg); }
+            66% { transform: translate(-1%, 1%) rotate(-0.5deg); }
+        }
+
+        /* ========== TOP BAR ========== */
+        .topbar {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background: rgba(13, 21, 38, 0.85);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--border);
+            padding: 14px 28px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 14px;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .brand-icon {
+            width: 42px;
+            height: 42px;
+            background: linear-gradient(135deg, var(--accent), var(--purple));
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            color: white;
+            box-shadow: 0 0 20px rgba(59,130,246,0.3);
+        }
+
+        .brand h1 {
+            font-size: 1.25rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #60a5fa, #c084fc);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -0.3px;
+        }
+
+        .brand-sub {
+            font-size: 11px;
+            color: var(--text-muted);
+            font-weight: 400;
+            margin-top: 1px;
+        }
+
+        .topbar-right {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            flex-wrap: wrap;
+        }
+
+        .stat-pill {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            padding: 7px 16px;
+            font-size: 13px;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        .stat-pill.online { color: var(--green); }
+        .stat-pill.offline { color: var(--red); }
+        .stat-pill.total { color: var(--accent); }
+
+        .stat-pill i { font-size: 10px; }
+
+        .last-update {
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+
+        .refresh-btn {
+            background: linear-gradient(135deg, var(--accent), #4f46e5);
+            color: white;
+            border: none;
+            padding: 9px 20px;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 13px;
+            font-family: 'Inter', sans-serif;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.3s;
+            box-shadow: 0 0 20px rgba(59,130,246,0.2);
+        }
+        .refresh-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 0 30px rgba(59,130,246,0.4);
+        }
+
+        /* ========== MAIN CONTENT ========== */
+        .main {
+            position: relative;
+            z-index: 1;
+            padding: 28px;
+            max-width: 1700px;
+            margin: 0 auto;
+        }
+
+        /* ========== EMPTY STATE ========== */
+        .empty-state {
+            text-align: center;
+            padding: 80px 40px;
+            animation: fadeIn 0.6s ease;
+        }
+
+        .empty-icon {
+            width: 100px;
+            height: 100px;
+            background: var(--bg-card);
+            border: 2px dashed var(--border);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 24px;
+            font-size: 2.5rem;
+            color: var(--text-muted);
+            animation: pulse-soft 3s ease-in-out infinite;
+        }
+
+        @keyframes pulse-soft {
+            0%, 100% { transform: scale(1); opacity: 0.7; }
+            50% { transform: scale(1.05); opacity: 1; }
+        }
+
+        .empty-state h2 {
+            font-size: 1.6rem;
+            font-weight: 700;
+            margin-bottom: 10px;
+            color: var(--text-primary);
+        }
+
+        .empty-state p {
+            color: var(--text-secondary);
+            font-size: 14px;
+            max-width: 500px;
+            margin: 0 auto 24px;
+            line-height: 1.6;
+        }
+
+        .empty-state code {
+            display: inline-block;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px 20px;
+            font-family: 'SF Mono', 'Monaco', 'Menlo', monospace;
+            font-size: 13px;
+            color: var(--green);
+            letter-spacing: 0.3px;
+        }
+
+        /* ========== AGENTS GRID ========== */
+        .agents-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+            gap: 20px;
+            animation: fadeIn 0.5s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(12px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* ========== AGENT CARD ========== */
+        .agent-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            overflow: hidden;
+            cursor: pointer;
+            transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+        }
+
+        .agent-card:hover {
+            border-color: var(--border-glow);
+            transform: translateY(-4px);
+            box-shadow: 0 12px 40px rgba(37, 99, 235, 0.15), 0 0 0 1px rgba(59,130,246,0.1);
+        }
+
+        .agent-card.online::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--green), var(--cyan));
+            border-radius: var(--radius) var(--radius) 0 0;
+        }
+
+        .agent-card.offline::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--red), var(--orange));
+            border-radius: var(--radius) var(--radius) 0 0;
+        }
+
+        .card-top {
+            padding: 20px 22px 14px;
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 16px;
+        }
+
+        .card-user {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            flex: 1;
+            min-width: 0;
+        }
+
+        .card-avatar {
+            width: 52px;
+            height: 52px;
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.4rem;
+            flex-shrink: 0;
+            position: relative;
+        }
+
+        .card-avatar.online {
+            background: linear-gradient(135deg, rgba(34,197,94,0.15), rgba(6,182,212,0.15));
+            color: var(--green);
+            border: 1px solid rgba(34,197,94,0.3);
+        }
+
+        .card-avatar.offline {
+            background: linear-gradient(135deg, rgba(239,68,68,0.1), rgba(249,115,22,0.1));
+            color: var(--red);
+            border: 1px solid rgba(239,68,68,0.2);
+        }
+
+        .card-avatar .live-dot {
+            position: absolute;
+            bottom: -2px;
+            right: -2px;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            border: 3px solid var(--bg-card);
+        }
+
+        .card-avatar .live-dot.online {
+            background: var(--green);
+            animation: livePulse 2s ease-in-out infinite;
+        }
+
+        .card-avatar .live-dot.offline {
+            background: var(--red);
+        }
+
+        @keyframes livePulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(34,197,94,0.5); }
+            50% { box-shadow: 0 0 0 5px rgba(34,197,94,0); }
+        }
+
+        .card-hostname {
+            font-size: 1.05rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            margin-bottom: 3px;
+        }
+
+        .card-ip {
+            font-size: 12px;
+            color: var(--text-muted);
+            font-family: 'SF Mono', 'Monaco', monospace;
+        }
+
+        .card-status-badge {
+            font-size: 11px;
+            font-weight: 700;
+            padding: 4px 12px;
+            border-radius: 20px;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            flex-shrink: 0;
+        }
+
+        .card-status-badge.online {
+            background: rgba(34,197,94,0.12);
+            color: var(--green);
+            border: 1px solid rgba(34,197,94,0.25);
+        }
+
+        .card-status-badge.offline {
+            background: rgba(239,68,68,0.1);
+            color: var(--red);
+            border: 1px solid rgba(239,68,68,0.2);
+        }
+
+        /* Stats Row inside Card */
+        .card-stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1px;
+            background: var(--border);
+            border-top: 1px solid var(--border);
+        }
+
+        .card-stat {
+            background: var(--bg-card);
+            padding: 14px 16px;
+            text-align: center;
+        }
+
+        .card-stat-label {
+            font-size: 10px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            margin-bottom: 6px;
+            font-weight: 600;
+        }
+
+        .card-stat-value {
+            font-size: 1.3rem;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+        }
+
+        .card-stat-value.cpu { color: var(--accent); }
+        .card-stat-value.mem { color: var(--purple); }
+        .card-stat-value.disk { color: var(--orange); }
+
+        .card-stat-bar {
+            height: 3px;
+            background: rgba(255,255,255,0.06);
+            border-radius: 2px;
+            margin-top: 8px;
+            overflow: hidden;
+        }
+
+        .card-stat-bar-fill {
+            height: 100%;
+            border-radius: 2px;
+            transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .card-stat-bar-fill.cpu { background: linear-gradient(90deg, var(--accent), var(--cyan)); }
+        .card-stat-bar-fill.mem { background: linear-gradient(90deg, var(--purple), #c084fc); }
+        .card-stat-bar-fill.disk { background: linear-gradient(90deg, var(--orange), #fbbf24); }
+
+        /* Card footer */
+        .card-footer {
+            padding: 12px 22px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 11px;
+            color: var(--text-muted);
+            border-top: 1px solid var(--border);
+        }
+
+        .card-footer i { margin-right: 5px; }
+
+        .card-footer .view-btn {
+            color: var(--accent);
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            transition: color 0.2s;
+        }
+
+        .agent-card:hover .view-btn { color: var(--accent-glow); }
+
+        /* ========== DETAIL MODAL ========== */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            z-index: 1000;
+            display: none;
+            align-items: flex-start;
+            justify-content: center;
+            padding: 40px 20px;
+            overflow-y: auto;
+            animation: fadeOverlay 0.25s ease;
+        }
+
+        .modal-overlay.active { display: flex; }
+
+        @keyframes fadeOverlay {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .modal {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            width: 100%;
+            max-width: 1200px;
+            box-shadow: 0 25px 80px rgba(0,0,0,0.5);
+            animation: slideUp 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+        }
+
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(30px) scale(0.97); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        .modal-header {
+            padding: 24px 28px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .modal-header-left {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .modal-avatar {
+            width: 56px;
+            height: 56px;
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+        }
+
+        .modal-avatar.online {
+            background: linear-gradient(135deg, rgba(34,197,94,0.2), rgba(6,182,212,0.2));
+            color: var(--green);
+        }
+
+        .modal-avatar.offline {
+            background: linear-gradient(135deg, rgba(239,68,68,0.15), rgba(249,115,22,0.15));
+            color: var(--red);
+        }
+
+        .modal-title { font-size: 1.3rem; font-weight: 700; }
+        .modal-subtitle { font-size: 13px; color: var(--text-muted); font-family: monospace; margin-top: 3px; }
+
+        .modal-close {
+            width: 40px;
+            height: 40px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            background: var(--bg-card);
+            color: var(--text-secondary);
+            font-size: 1.1rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+        .modal-close:hover { background: var(--red); color: white; border-color: var(--red); }
+
+        /* Modal Stats */
+        .modal-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 12px;
+            padding: 20px 28px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .m-stat {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            padding: 14px 16px;
+        }
+
+        .m-stat-label {
+            font-size: 10px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            margin-bottom: 6px;
+            font-weight: 600;
+        }
+
+        .m-stat-value {
+            font-size: 1.4rem;
+            font-weight: 800;
+        }
+
+        .m-stat-sub {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        .m-stat-bar {
+            height: 4px;
+            background: rgba(255,255,255,0.06);
+            border-radius: 2px;
+            margin-top: 8px;
+            overflow: hidden;
+        }
+
+        .m-stat-bar-fill {
+            height: 100%;
+            border-radius: 2px;
+            transition: width 0.6s;
+        }
+
+        /* Modal Content Grid */
+        .modal-body {
+            padding: 20px 28px 28px;
+        }
+
+        .modal-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+            gap: 16px;
+        }
+
+        .m-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            overflow: hidden;
+        }
+
+        .m-card-header {
+            padding: 13px 18px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .m-card-header h3 {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 600;
+        }
+
+        .m-card-header h3 i { color: var(--accent); font-size: 13px; }
+
+        .m-card-body {
+            padding: 14px 18px;
+            max-height: 320px;
+            overflow-y: auto;
+        }
+
+        .m-card-body::-webkit-scrollbar { width: 4px; }
+        .m-card-body::-webkit-scrollbar-track { background: transparent; }
+        .m-card-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+        .full-span { grid-column: 1 / -1; }
+
+        /* Screenshot */
+        .screenshot {
+            width: 100%;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            display: block;
+            background: var(--bg-primary);
+        }
+
+        .ss-placeholder {
+            text-align: center;
+            padding: 50px 20px;
+            color: var(--text-muted);
+        }
+
+        .ss-placeholder i {
+            font-size: 2.5rem;
+            margin-bottom: 12px;
+            display: block;
+            opacity: 0.5;
+        }
+
+        /* History list */
+        .h-list { list-style: none; }
+        .h-list li {
+            padding: 7px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.03);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+        .h-list li:last-child { border: none; }
+
+        .h-badge {
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+        .h-badge.safari { background: rgba(3,105,161,0.3); color: #7dd3fc; }
+        .h-badge.chrome { background: rgba(22,101,52,0.3); color: #86efac; }
+        .h-badge.firefox { background: rgba(124,45,18,0.3); color: #fdba74; }
+
+        .h-title {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        /* Process table */
+        .p-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+        .p-table th {
+            text-align: left;
+            padding: 7px 8px;
+            color: var(--text-muted);
+            font-weight: 600;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 1px solid var(--border);
+        }
+        .p-table td {
+            padding: 6px 8px;
+            border-bottom: 1px solid rgba(255,255,255,0.02);
+            color: var(--text-secondary);
+        }
+        .p-table tr:hover td { background: rgba(255,255,255,0.02); }
+        .cpu-hi { color: var(--red); font-weight: 600; }
+        .cpu-md { color: var(--orange); }
+        .cpu-lo { color: var(--text-muted); }
+
+        /* Files */
+        .f-item {
+            padding: 5px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.02);
+            font-size: 11px;
+            font-family: 'SF Mono', 'Monaco', monospace;
+            color: var(--text-muted);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .f-item:hover { color: var(--text-primary); }
+
+        /* Connection table */
+        .c-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+        .c-table th {
+            text-align: left;
+            padding: 7px 8px;
+            color: var(--text-muted);
+            font-weight: 600;
+            font-size: 10px;
+            text-transform: uppercase;
+            border-bottom: 1px solid var(--border);
+        }
+        .c-table td {
+            padding: 5px 8px;
+            border-bottom: 1px solid rgba(255,255,255,0.02);
+            font-family: monospace;
+            color: var(--text-secondary);
+        }
+
+        /* Apps chips */
+        .app-chip {
+            display: inline-block;
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.06);
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            margin: 3px;
+            color: var(--text-secondary);
+            transition: all 0.2s;
+        }
+        .app-chip:hover { background: rgba(59,130,246,0.1); border-color: rgba(59,130,246,0.2); color: var(--accent-glow); }
+
+        /* Active window */
+        .active-win-text {
+            font-size: 1.8rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--accent), var(--cyan));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            padding: 6px 0;
+        }
+
+        /* ========== RESPONSIVE ========== */
+        @media (max-width: 768px) {
+            .topbar { padding: 12px 16px; }
+            .main { padding: 16px; }
+            .agents-grid { grid-template-columns: 1fr; }
+            .modal-grid { grid-template-columns: 1fr; }
+            .modal-stats { grid-template-columns: repeat(2, 1fr); }
+            .modal { border-radius: 16px; }
+        }
+
+        /* Loading shimmer */
+        .shimmer {
+            background: linear-gradient(90deg, var(--bg-card) 25%, var(--bg-card-hover) 50%, var(--bg-card) 75%);
+            background-size: 200% 100%;
+            animation: shimmer 1.5s infinite;
+        }
+        @keyframes shimmer {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+
+        /* No-data inside modal */
+        .no-data {
+            text-align: center;
+            padding: 24px;
+            color: var(--text-muted);
+            font-size: 12px;
+        }
+        .no-data i { font-size: 1.5rem; display: block; margin-bottom: 8px; opacity: 0.4; }
+
+        /* Terminal */
+        .terminal-box { }
+        .cmd-row { display: flex; gap: 8px; }
+        .cmd-row input {
+            flex: 1;
+            padding: 10px 16px;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border);
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            font-size: 13px;
+            font-family: 'SF Mono', 'Monaco', 'Menlo', monospace;
+            transition: border-color 0.2s;
+        }
+        .cmd-row input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(59,130,246,0.15); }
+        .cmd-row input::placeholder { color: var(--text-muted); }
+        .cmd-run-btn {
+            background: linear-gradient(135deg, var(--green), #16a34a);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            font-weight: 700;
+            font-size: 13px;
+            font-family: 'Inter', sans-serif;
+            white-space: nowrap;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s;
+            box-shadow: 0 0 15px rgba(34,197,94,0.2);
+        }
+        .cmd-run-btn:hover { transform: translateY(-1px); box-shadow: 0 0 25px rgba(34,197,94,0.3); }
+        .cmd-output {
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            padding: 14px 16px;
+            border-radius: var(--radius-sm);
+            margin-top: 10px;
+            max-height: 220px;
+            overflow: auto;
+            font-size: 12px;
+            white-space: pre-wrap;
+            word-break: break-all;
+            font-family: 'SF Mono', 'Monaco', 'Menlo', monospace;
+            color: var(--green);
+            min-height: 50px;
+            line-height: 1.5;
+        }
+        .cmd-output::-webkit-scrollbar { width: 4px; }
+        .cmd-output::-webkit-scrollbar-track { background: transparent; }
+        .cmd-output::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+        .cmd-error { color: var(--red); }
+    </style>
+</head>
+<body>
+
+<!-- ============= TOP BAR ============= -->
+<div class="topbar">
+    <div class="brand">
+        <div class="brand-icon"><i class="fas fa-satellite-dish"></i></div>
+        <div>
+            <h1>Central Monitor</h1>
+            <div class="brand-sub">Real-time Agent Dashboard</div>
+        </div>
+    </div>
+    <div class="topbar-right">
+        <div class="stat-pill total" id="totalPill"><i class="fas fa-server"></i> <span id="totalCount">0</span> Agents</div>
+        <div class="stat-pill online" id="onlinePill"><i class="fas fa-circle"></i> <span id="onlineCount">0</span> Online</div>
+        <div class="stat-pill offline" id="offlinePill"><i class="fas fa-circle"></i> <span id="offlineCount">0</span> Offline</div>
+        <span class="last-update" id="lastUpdate"></span>
+        <button class="refresh-btn" onclick="refreshAll()">
+            <i class="fas fa-sync-alt" id="refreshIcon"></i> Refresh
+        </button>
+    </div>
+</div>
+
+<!-- ============= MAIN ============= -->
+<div class="main">
+    <!-- Empty state -->
+    <div class="empty-state" id="emptyState" style="display:none;">
+        <div class="empty-icon"><i class="fas fa-satellite-dish"></i></div>
+        <h2>No Agents Connected</h2>
+        <p>Start an agent on any machine to see it appear here automatically. Use the command below:</p>
+        <code>python3 monitor.py --server http://&lt;this-server-ip&gt;:5000</code>
+    </div>
+
+    <!-- Agents Grid -->
+    <div class="agents-grid" id="agentsGrid"></div>
+</div>
+
+<!-- ============= DETAIL MODAL ============= -->
+<div class="modal-overlay" id="modalOverlay" onclick="if(event.target===this) closeModal()">
+    <div class="modal" id="modalContent">
+        <!-- Filled dynamically -->
+    </div>
+</div>
+
+<!-- ============= JAVASCRIPT ============= -->
+<script>
+let allMachines = [];
+let isRefreshing = false;
+let detailMachineId = null;
+
+// ==================== LOAD ALL MACHINES ====================
+async function loadMachines() {
+    try {
+        const res = await fetch('/api/machines');
+        allMachines = await res.json();
+
+        // Update pills
+        const online = allMachines.filter(m => m.status === 'online').length;
+        const offline = allMachines.length - online;
+        document.getElementById('totalCount').textContent = allMachines.length;
+        document.getElementById('onlineCount').textContent = online;
+        document.getElementById('offlineCount').textContent = offline;
+
+        if (allMachines.length === 0) {
+            document.getElementById('emptyState').style.display = 'block';
+            document.getElementById('agentsGrid').style.display = 'none';
+            return;
+        }
+
+        document.getElementById('emptyState').style.display = 'none';
+        document.getElementById('agentsGrid').style.display = 'grid';
+
+        // Sort: online first
+        allMachines.sort((a, b) => {
+            if (a.status === 'online' && b.status !== 'online') return -1;
+            if (a.status !== 'online' && b.status === 'online') return 1;
+            return (a.hostname || a.id).localeCompare(b.hostname || b.id);
+        });
+
+        // Fetch info for each machine to get CPU/Memory/Disk
+        const infoPromises = allMachines.map(m =>
+            fetch(`/api/machine/${m.id}/info`).then(r => r.json()).catch(() => ({}))
+        );
+        const infos = await Promise.all(infoPromises);
+
+        // Build cards
+        const grid = document.getElementById('agentsGrid');
+        grid.innerHTML = allMachines.map((m, i) => {
+            const info = infos[i] || {};
+            const cpu = info.cpu_percent !== undefined ? info.cpu_percent : '--';
+            const mem = info.memory_percent !== undefined ? info.memory_percent : '--';
+            const disk = info.disk_percent !== undefined ? info.disk_percent : '--';
+            const cpuW = cpu !== '--' ? cpu : 0;
+            const memW = mem !== '--' ? mem : 0;
+            const diskW = disk !== '--' ? disk : 0;
+            const status = m.status || 'offline';
+            const lastSeen = formatLastSeen(m.last_seen);
+            const os = info.os || '';
+            const uptime = info.uptime || '';
+
+            return `
+            <div class="agent-card ${status}" onclick="openDetail('${m.id}')">
+                <div class="card-top">
+                    <div class="card-user">
+                        <div class="card-avatar ${status}">
+                            <i class="fas fa-desktop"></i>
+                            <div class="live-dot ${status}"></div>
+                        </div>
+                        <div style="min-width:0;">
+                            <div class="card-hostname">${escHtml(m.hostname || m.id)}</div>
+                            <div class="card-ip">${escHtml(m.ip || 'N/A')}</div>
+                        </div>
+                    </div>
+                    <span class="card-status-badge ${status}">${status}</span>
+                </div>
+                <div class="card-stats">
+                    <div class="card-stat">
+                        <div class="card-stat-label">CPU</div>
+                        <div class="card-stat-value cpu">${cpu}${cpu !== '--' ? '%' : ''}</div>
+                        <div class="card-stat-bar"><div class="card-stat-bar-fill cpu" style="width:${cpuW}%"></div></div>
+                    </div>
+                    <div class="card-stat">
+                        <div class="card-stat-label">Memory</div>
+                        <div class="card-stat-value mem">${mem}${mem !== '--' ? '%' : ''}</div>
+                        <div class="card-stat-bar"><div class="card-stat-bar-fill mem" style="width:${memW}%"></div></div>
+                    </div>
+                    <div class="card-stat">
+                        <div class="card-stat-label">Disk</div>
+                        <div class="card-stat-value disk">${disk}${disk !== '--' ? '%' : ''}</div>
+                        <div class="card-stat-bar"><div class="card-stat-bar-fill disk" style="width:${diskW}%"></div></div>
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <span><i class="fas fa-clock"></i> ${lastSeen}</span>
+                    <span class="view-btn"><i class="fas fa-expand-alt"></i> View Details</span>
+                </div>
+            </div>`;
+        }).join('');
+
+    } catch (e) {
+        console.error('loadMachines error:', e);
+    }
+}
+
+// ==================== FORMAT LAST SEEN ====================
+function formatLastSeen(ts) {
+    if (!ts || ts === 'never') return 'Never';
+    try {
+        const d = new Date(ts);
+        const diff = Math.floor((Date.now() - d.getTime()) / 1000);
+        if (diff < 10) return 'Just now';
+        if (diff < 60) return diff + 's ago';
+        if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+        if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+        return d.toLocaleDateString();
+    } catch { return ts; }
+}
+
+// ==================== ESCAPE HTML ====================
+function escHtml(s) {
+    const d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+}
+
+// ==================== OPEN DETAIL MODAL ====================
+async function openDetail(machineId) {
+    detailMachineId = machineId;
+    const overlay = document.getElementById('modalOverlay');
+    const modal = document.getElementById('modalContent');
+    
+    // Show loading
+    const machine = allMachines.find(m => m.id === machineId) || {};
+    const status = machine.status || 'offline';
+    
+    modal.innerHTML = `
+        <div class="modal-header">
+            <div class="modal-header-left">
+                <div class="modal-avatar ${status}"><i class="fas fa-desktop"></i></div>
+                <div>
+                    <div class="modal-title">${escHtml(machine.hostname || machineId)}</div>
+                    <div class="modal-subtitle">${escHtml(machine.ip || '')} · ${escHtml(machineId)}</div>
+                </div>
+            </div>
+            <button class="modal-close" onclick="closeModal()"><i class="fas fa-times"></i></button>
+        </div>
+        <div style="padding:60px;text-align:center;color:var(--text-muted);">
+            <i class="fas fa-spinner fa-spin" style="font-size:2rem;margin-bottom:12px;display:block;"></i>
+            Loading data...
+        </div>
+    `;
+    overlay.classList.add('active');
+    document.body.style.overflow = 'hidden';
+
+    // Fetch all data
+    try {
+        const [info, active, history, procs, files, net, apps] = await Promise.all([
+            fetch(`/api/machine/${machineId}/info`).then(r => r.json()).catch(() => ({})),
+            fetch(`/api/machine/${machineId}/active_window`).then(r => r.json()).catch(() => ({})),
+            fetch(`/api/machine/${machineId}/history`).then(r => r.json()).catch(() => []),
+            fetch(`/api/machine/${machineId}/processes`).then(r => r.json()).catch(() => []),
+            fetch(`/api/machine/${machineId}/files`).then(r => r.json()).catch(() => []),
+            fetch(`/api/machine/${machineId}/network`).then(r => r.json()).catch(() => ({})),
+            fetch(`/api/machine/${machineId}/apps`).then(r => r.json()).catch(() => [])
+        ]);
+
+        const cpu = info.cpu_percent ?? '--';
+        const mem = info.memory_percent ?? '--';
+        const disk = info.disk_percent ?? '--';
+
+        modal.innerHTML = `
+            <div class="modal-header">
+                <div class="modal-header-left">
+                    <div class="modal-avatar ${status}"><i class="fas fa-desktop"></i></div>
+                    <div>
+                        <div class="modal-title">${escHtml(info.hostname || machine.hostname || machineId)}</div>
+                        <div class="modal-subtitle">${escHtml(info.ip || machine.ip || '')} · ${escHtml(machineId)}</div>
+                    </div>
+                </div>
+                <button class="modal-close" onclick="closeModal()"><i class="fas fa-times"></i></button>
+            </div>
+
+            <!-- Stats -->
+            <div class="modal-stats">
+                <div class="m-stat">
+                    <div class="m-stat-label">CPU</div>
+                    <div class="m-stat-value" style="color:var(--accent);">${cpu}${cpu !== '--' ? '%' : ''}</div>
+                    <div class="m-stat-bar"><div class="m-stat-bar-fill" style="width:${cpu !== '--' ? cpu : 0}%;background:linear-gradient(90deg,var(--accent),var(--cyan));"></div></div>
+                </div>
+                <div class="m-stat">
+                    <div class="m-stat-label">Memory</div>
+                    <div class="m-stat-value" style="color:var(--purple);">${mem}${mem !== '--' ? '%' : ''}</div>
+                    <div class="m-stat-sub">${info.memory_used ?? '--'} / ${info.memory_total ?? '--'} GB</div>
+                    <div class="m-stat-bar"><div class="m-stat-bar-fill" style="width:${mem !== '--' ? mem : 0}%;background:linear-gradient(90deg,var(--purple),#c084fc);"></div></div>
+                </div>
+                <div class="m-stat">
+                    <div class="m-stat-label">Disk</div>
+                    <div class="m-stat-value" style="color:var(--orange);">${disk}${disk !== '--' ? '%' : ''}</div>
+                    <div class="m-stat-sub">${info.disk_used ?? '--'} / ${info.disk_total ?? '--'} GB</div>
+                    <div class="m-stat-bar"><div class="m-stat-bar-fill" style="width:${disk !== '--' ? disk : 0}%;background:linear-gradient(90deg,var(--orange),#fbbf24);"></div></div>
+                </div>
+                <div class="m-stat">
+                    <div class="m-stat-label">Uptime</div>
+                    <div class="m-stat-value" style="color:var(--text-primary);font-size:1.1rem;">${info.uptime || '--'}</div>
+                    <div class="m-stat-sub">${info.os || '--'}</div>
+                </div>
+                <div class="m-stat">
+                    <div class="m-stat-label">Network Sent</div>
+                    <div class="m-stat-value" style="color:var(--cyan);">${net.bytes_sent ?? '--'}</div>
+                    <div class="m-stat-sub">MB total</div>
+                </div>
+                <div class="m-stat">
+                    <div class="m-stat-label">Network Recv</div>
+                    <div class="m-stat-value" style="color:var(--green);">${net.bytes_recv ?? '--'}</div>
+                    <div class="m-stat-sub">MB total</div>
+                </div>
+            </div>
+
+            <!-- Body -->
+            <div class="modal-body">
+                <div class="modal-grid">
+
+                    <!-- Screenshot -->
+                    <div class="m-card full-span">
+                        <div class="m-card-header">
+                            <h3><i class="fas fa-camera"></i> Live Screenshot</h3>
+                        </div>
+                        <div class="m-card-body" style="max-height:none;" id="modalScreenshot">
+                            ${buildScreenshot(machineId)}
+                        </div>
+                    </div>
+
+                    <!-- Active Window -->
+                    <div class="m-card">
+                        <div class="m-card-header"><h3><i class="fas fa-window-maximize"></i> Active Window</h3></div>
+                        <div class="m-card-body">
+                            <div class="active-win-text">${escHtml(active.active || 'Unknown')}</div>
+                            <div style="font-size:11px;color:var(--text-muted);margin-top:6px;">As of ${new Date().toLocaleTimeString()}</div>
+                        </div>
+                    </div>
+
+                    <!-- Machine Info -->
+                    <div class="m-card">
+                        <div class="m-card-header"><h3><i class="fas fa-info-circle"></i> Machine Info</h3></div>
+                        <div class="m-card-body" style="font-size:13px;line-height:2;">
+                            <div><span style="color:var(--text-muted);">Hostname:</span> ${escHtml(info.hostname || '--')}</div>
+                            <div><span style="color:var(--text-muted);">IP:</span> <span style="font-family:monospace;">${escHtml(info.ip || '--')}</span></div>
+                            <div><span style="color:var(--text-muted);">OS:</span> ${escHtml(info.os || '--')}</div>
+                            <div><span style="color:var(--text-muted);">CPU Cores:</span> ${info.cpu_cores || '--'}</div>
+                            <div><span style="color:var(--text-muted);">Status:</span> <span style="color:${status === 'online' ? 'var(--green)' : 'var(--red)'};font-weight:700;">${status.toUpperCase()}</span></div>
+                        </div>
+                    </div>
+
+                    <!-- Browser History -->
+                    <div class="m-card">
+                        <div class="m-card-header">
+                            <h3><i class="fas fa-globe"></i> Browser History</h3>
+                            <span style="font-size:11px;color:var(--text-muted);">${history.length} entries</span>
+                        </div>
+                        <div class="m-card-body">
+                            ${buildHistory(history)}
+                        </div>
+                    </div>
+
+                    <!-- Processes -->
+                    <div class="m-card">
+                        <div class="m-card-header">
+                            <h3><i class="fas fa-microchip"></i> Processes</h3>
+                            <span style="font-size:11px;color:var(--text-muted);">${procs.length} running</span>
+                        </div>
+                        <div class="m-card-body">
+                            ${buildProcesses(procs)}
+                        </div>
+                    </div>
+
+                    <!-- Recent Files -->
+                    <div class="m-card">
+                        <div class="m-card-header"><h3><i class="fas fa-file-alt"></i> Recent Files</h3></div>
+                        <div class="m-card-body">
+                            ${buildFiles(files)}
+                        </div>
+                    </div>
+
+                    <!-- Network -->
+                    <div class="m-card">
+                        <div class="m-card-header"><h3><i class="fas fa-network-wired"></i> Network Connections</h3></div>
+                        <div class="m-card-body">
+                            ${buildConnections(net)}
+                        </div>
+                    </div>
+
+                    <!-- Remote Terminal -->
+                    <div class="m-card full-span">
+                        <div class="m-card-header">
+                            <h3><i class="fas fa-terminal"></i> Remote Terminal</h3>
+                            <span style="font-size:11px;color:var(--text-muted);">Execute commands on ${escHtml(info.hostname || machine.hostname || machineId)}</span>
+                        </div>
+                        <div class="m-card-body terminal-box" style="max-height:none;">
+                            <div class="cmd-row">
+                                <input type="text" id="cmdInput" placeholder="Type command... e.g. ls ~/Desktop, whoami, uptime"
+                                       onkeypress="if(event.key==='Enter') runCommand()" autocomplete="off" spellcheck="false" />
+                                <button class="cmd-run-btn" onclick="runCommand()"><i class="fas fa-play"></i> Run</button>
+                            </div>
+                            <div id="cmdOutput" class="cmd-output">$ ready...</div>
+                        </div>
+                    </div>
+
+                    <!-- Apps -->
+                    <div class="m-card full-span">
+                        <div class="m-card-header"><h3><i class="fas fa-th-large"></i> Installed Apps</h3></div>
+                        <div class="m-card-body" style="max-height:200px;">
+                            ${apps.length ? apps.map(a => `<span class="app-chip">${escHtml(a)}</span>`).join('') : '<div class="no-data"><i class="fas fa-cube"></i>No apps data</div>'}
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        `;
+
+    } catch (e) {
+        console.error('Detail load error:', e);
+        modal.innerHTML += `<div style="padding:30px;text-align:center;color:var(--red);">Failed to load details</div>`;
+    }
+}
+
+// ==================== BUILD HELPERS ====================
+function buildScreenshot(machineId) {
+    return `<img class="screenshot" src="/api/machine/${machineId}/screenshot?t=${Date.now()}" 
+            onerror="this.parentElement.innerHTML='<div class=\\'ss-placeholder\\'><i class=\\'fas fa-image\\'></i>Screenshot not available</div>'" />`;
+}
+
+function buildHistory(data) {
+    if (!data || !data.length) return '<div class="no-data"><i class="fas fa-globe"></i>No history data</div>';
+    return '<ul class="h-list">' + data.slice(0, 30).map(h => {
+        const cls = (h.browser || '').toLowerCase();
+        const title = (h.title || h.url || '').substring(0, 55);
+        return `<li><span class="h-badge ${cls}">${escHtml(h.browser || '?')}</span><span class="h-title" title="${escHtml(h.url || '')}">${escHtml(title)}</span></li>`;
+    }).join('') + '</ul>';
+}
+
+function buildProcesses(data) {
+    if (!data || !data.length) return '<div class="no-data"><i class="fas fa-microchip"></i>No process data</div>';
+    let html = '<table class="p-table"><tr><th>PID</th><th>Name</th><th>CPU%</th><th>Mem%</th></tr>';
+    data.slice(0, 30).forEach(p => {
+        const cls = p.cpu > 10 ? 'cpu-hi' : p.cpu > 2 ? 'cpu-md' : 'cpu-lo';
+        html += `<tr><td style="color:var(--text-muted)">${p.pid}</td><td>${escHtml((p.name || '').substring(0, 28))}</td><td class="${cls}">${p.cpu}</td><td style="color:var(--purple)">${p.mem}</td></tr>`;
+    });
+    return html + '</table>';
+}
+
+function buildFiles(data) {
+    if (!data || !data.length) return '<div class="no-data"><i class="fas fa-file-alt"></i>No recent files</div>';
+    return data.slice(0, 25).map(f => {
+        const short = f.replace(/^\/Users\/[^\/]+\//, '~/');
+        return `<div class="f-item" title="${escHtml(f)}">${escHtml(short)}</div>`;
+    }).join('');
+}
+
+function buildConnections(data) {
+    if (!data || !data.connections || !data.connections.length) return '<div class="no-data"><i class="fas fa-network-wired"></i>No active connections</div>';
+    let html = '<table class="c-table"><tr><th>Local</th><th>Remote</th></tr>';
+    data.connections.slice(0, 15).forEach(c => {
+        html += `<tr><td>${escHtml(c.local)}</td><td>${escHtml(c.remote)}</td></tr>`;
+    });
+    return html + '</table>';
+}
+
+// ==================== CLOSE MODAL ====================
+function closeModal() {
+    document.getElementById('modalOverlay').classList.remove('active');
+    document.body.style.overflow = '';
+    detailMachineId = null;
+}
+
+// Close on Escape
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+// ==================== REMOTE COMMAND (Polling-Based) ====================
+async function runCommand() {
+    if (!detailMachineId) return;
+    const input = document.getElementById('cmdInput');
+    const output = document.getElementById('cmdOutput');
+    const cmd = input.value.trim();
+    if (!cmd) return;
+
+    output.textContent = '$ ' + cmd + '\n⏳ Queuing command...';
+    output.className = 'cmd-output';
+    input.value = '';
+
+    try {
+        // Step 1: Queue the command on server
+        const res = await fetch(`/api/machine/${detailMachineId}/command`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ command: cmd })
+        });
+        const queueData = await res.json();
+        
+        if (!queueData.success) {
+            output.innerHTML = '$ ' + cmd + '\n<span class="cmd-error">❌ ' + escHtml(queueData.error || 'Failed to queue') + '</span>';
+            return;
+        }
+
+        const commandId = queueData.command_id;
+        output.textContent = '$ ' + cmd + '\n⏳ Waiting for agent to execute...';
+
+        // Step 2: Poll for result (max 30 seconds)
+        let attempts = 0;
+        const maxAttempts = 20; // 20 * 1.5s = 30s
+        
+        const pollResult = async () => {
+            attempts++;
+            const dots = '.'.repeat((attempts % 3) + 1);
+            output.textContent = '$ ' + cmd + '\n⏳ Waiting for agent' + dots + ' (' + Math.round(attempts * 1.5) + 's)';
+            
+            try {
+                const statusRes = await fetch(`/api/machine/${detailMachineId}/command/status/${commandId}`);
+                const statusData = await statusRes.json();
+                
+                if (statusData.ready) {
+                    const result = statusData.result;
+                    if (result.success) {
+                        output.textContent = '$ ' + cmd + '\n' + (result.output || '(no output)');
+                        output.className = 'cmd-output';
+                    } else {
+                        output.innerHTML = '$ ' + cmd + '\n<span class="cmd-error">❌ ' + escHtml(result.error || 'Command failed') + '</span>';
+                    }
+                    return; // Done!
+                }
+                
+                if (attempts < maxAttempts) {
+                    setTimeout(pollResult, 1500);
+                } else {
+                    output.innerHTML = '$ ' + cmd + '\n<span class="cmd-error">⏰ Timeout: Agent did not respond in 30s. Is the agent online?</span>';
+                }
+            } catch(e) {
+                output.innerHTML = '$ ' + cmd + '\n<span class="cmd-error">❌ Poll error: ' + escHtml(e.message) + '</span>';
+            }
+        };
+        
+        // Start polling after 1.5s
+        setTimeout(pollResult, 1500);
+        
+    } catch(e) {
+        output.innerHTML = '$ ' + cmd + '\n<span class="cmd-error">❌ Network error: ' + escHtml(e.message) + '</span>';
+    }
+    output.scrollTop = output.scrollHeight;
+}
+
+// ==================== REFRESH ====================
+async function refreshAll() {
+    if (isRefreshing) return;
+    isRefreshing = true;
+    const icon = document.getElementById('refreshIcon');
+    icon.classList.add('fa-spin');
+    
+    await loadMachines();
+    document.getElementById('lastUpdate').textContent = 'Updated: ' + new Date().toLocaleTimeString();
+    
+    icon.classList.remove('fa-spin');
+    isRefreshing = false;
+}
+
+// ==================== INIT ====================
+loadMachines().then(() => {
+    document.getElementById('lastUpdate').textContent = 'Updated: ' + new Date().toLocaleTimeString();
+});
+
+// Auto-refresh every 10 seconds
+setInterval(() => {
+    refreshAll();
+}, 10000);
+</script>
+
+</body>
+</html>

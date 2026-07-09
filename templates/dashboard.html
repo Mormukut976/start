@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Employee Monitor Dashboard</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: #0f172a; color: #e2e8f0; min-height: 100vh; }
+
+        /* ---- Top Bar ---- */
+        .topbar { background: #1e293b; border-bottom: 1px solid #334155; padding: 12px 24px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; position: sticky; top: 0; z-index: 100; }
+        .topbar .brand { display: flex; align-items: center; gap: 10px; }
+        .topbar .brand h1 { font-size: 1.2rem; background: linear-gradient(135deg, #38bdf8, #22d3ee); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-weight: 700; }
+        .topbar .meta { display: flex; align-items: center; gap: 16px; font-size: 13px; color: #94a3b8; flex-wrap: wrap; }
+        .dot-live { width: 8px; height: 8px; background: #4ade80; border-radius: 50%; animation: pulse 1.5s infinite; display: inline-block; }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+        .ip-badge { background: #0f172a; border: 1px solid #334155; padding: 4px 12px; border-radius: 20px; font-family: monospace; font-size: 12px; color: #38bdf8; cursor: pointer; }
+        .ip-badge:hover { border-color: #38bdf8; }
+        .refresh-btn { background: #38bdf8; color: #0f172a; border: none; padding: 6px 16px; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 13px; display: flex; align-items: center; gap: 6px; }
+        .refresh-btn:hover { background: #7dd3fc; }
+
+        /* ---- Layout ---- */
+        .main { padding: 20px 24px; max-width: 1600px; margin: 0 auto; }
+
+        /* ---- Stat Cards ---- */
+        .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 20px; }
+        .stat { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 14px 16px; }
+        .stat .label { font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+        .stat .value { font-size: 22px; font-weight: 700; color: #f1f5f9; }
+        .stat .sub { font-size: 11px; color: #64748b; margin-top: 2px; }
+        .bar { height: 4px; background: #334155; border-radius: 2px; margin-top: 8px; overflow: hidden; }
+        .bar-fill { height: 100%; border-radius: 2px; transition: width 0.5s; }
+        .bar-fill.cpu { background: #38bdf8; }
+        .bar-fill.mem { background: #a78bfa; }
+        .bar-fill.disk { background: #fb923c; }
+
+        /* ---- Grid ---- */
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 16px; }
+        .card { background: #1e293b; border-radius: 14px; border: 1px solid #334155; overflow: hidden; }
+        .card-header { padding: 14px 18px; border-bottom: 1px solid #334155; display: flex; align-items: center; justify-content: space-between; }
+        .card-header h3 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: #94a3b8; display: flex; align-items: center; gap: 8px; }
+        .card-header h3 i { color: #38bdf8; }
+        .card-body { padding: 16px 18px; }
+        .full-width { grid-column: 1 / -1; }
+
+        /* ---- Screenshot ---- */
+        .screenshot { width: 100%; border-radius: 8px; border: 1px solid #334155; display: block; min-height: 200px; background: #0f172a; }
+        .ss-err { text-align: center; padding: 40px; color: #64748b; }
+        .ss-err i { font-size: 2rem; margin-bottom: 10px; display: block; }
+
+        /* ---- Lists ---- */
+        .item-list { list-style: none; }
+        .item-list li { padding: 7px 0; border-bottom: 1px solid #1e293b; display: flex; align-items: center; gap: 8px; font-size: 12px; }
+        .item-list li:last-child { border-bottom: none; }
+        .badge { background: #334155; padding: 1px 8px; border-radius: 4px; font-size: 10px; color: #94a3b8; white-space: nowrap; }
+        .badge.safari { background: #0369a1; color: #bae6fd; }
+        .badge.chrome { background: #166534; color: #bbf7d0; }
+        .badge.firefox { background: #7c2d12; color: #fed7aa; }
+
+        /* ---- Processes ---- */
+        .proc-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+        .proc-table th { text-align: left; padding: 6px 8px; color: #64748b; font-weight: 500; border-bottom: 1px solid #334155; }
+        .proc-table td { padding: 5px 8px; border-bottom: 1px solid #1e293b; }
+        .proc-table tr:hover td { background: #0f172a; }
+        .cpu-high { color: #f87171; }
+        .cpu-med { color: #fb923c; }
+        .cpu-low { color: #94a3b8; }
+
+        /* ---- Files ---- */
+        .file-list { font-size: 11px; font-family: 'Monaco', 'Menlo', monospace; }
+        .file-list .file-item { padding: 4px 0; border-bottom: 1px solid #1e293b; color: #94a3b8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .file-list .file-item:hover { color: #e2e8f0; }
+
+        /* ---- Apps ---- */
+        .chip { display: inline-block; background: #334155; padding: 3px 10px; border-radius: 12px; font-size: 11px; margin: 2px; color: #cbd5e1; }
+
+        /* ---- Terminal ---- */
+        .terminal { }
+        .cmd-row { display: flex; gap: 8px; }
+        .cmd-row input { flex: 1; padding: 9px 14px; border-radius: 8px; border: 1px solid #334155; background: #0f172a; color: #e2e8f0; font-size: 13px; font-family: monospace; }
+        .cmd-row input:focus { outline: none; border-color: #38bdf8; }
+        .cmd-row button { background: #22c55e; color: #0f172a; border: none; padding: 9px 18px; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 13px; white-space: nowrap; }
+        .cmd-row button:hover { background: #4ade80; }
+        .cmd-output { background: #0f172a; border: 1px solid #334155; padding: 12px; border-radius: 8px; margin-top: 10px; max-height: 200px; overflow: auto; font-size: 11px; white-space: pre-wrap; font-family: 'Monaco', 'Menlo', monospace; color: #4ade80; min-height: 48px; }
+
+        /* ---- Network ---- */
+        .conn-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+        .conn-table th { text-align: left; padding: 6px 8px; color: #64748b; font-weight: 500; border-bottom: 1px solid #334155; }
+        .conn-table td { padding: 5px 8px; border-bottom: 1px solid #1e293b; font-family: monospace; }
+
+        /* ---- Active Window ---- */
+        .active-win { font-size: 28px; font-weight: 700; color: #38bdf8; padding: 8px 0; }
+
+        /* ---- Responsive ---- */
+        @media (max-width: 768px) {
+            .grid { grid-template-columns: 1fr; }
+            .topbar { flex-direction: column; align-items: flex-start; }
+            .stats { grid-template-columns: repeat(2, 1fr); }
+        }
+    </style>
+</head>
+<body>
+
+<!-- ============= TOP BAR ============= -->
+<div class="topbar">
+    <div class="brand">
+        <span class="dot-live"></span>
+        <h1><i class="fas fa-desktop"></i> &nbsp;Employee Monitor</h1>
+    </div>
+    <div class="meta">
+        <span id="hostnameDisplay" style="color:#e2e8f0;font-weight:600;">Loading...</span>
+        <span class="ip-badge" id="ipBadge" title="Click to copy dashboard URL" onclick="copyURL()">
+            <i class="fas fa-wifi"></i> &nbsp;<span id="ipDisplay">...</span>
+        </span>
+        <span id="lastUpdate" style="font-size:12px;">Updating...</span>
+        <button class="refresh-btn" onclick="refreshAll()">
+            <i class="fas fa-sync-alt" id="refreshIcon"></i> Refresh
+        </button>
+    </div>
+</div>
+
+<!-- ============= MAIN ============= -->
+<div class="main">
+
+    <!-- Stats Row -->
+    <div class="stats" id="statsRow">
+        <div class="stat"><div class="label">CPU</div><div class="value" id="cpuVal">--%</div><div class="bar"><div class="bar-fill cpu" id="cpuBar" style="width:0%"></div></div></div>
+        <div class="stat"><div class="label">Memory</div><div class="value" id="memVal">--%</div><div class="bar"><div class="bar-fill mem" id="memBar" style="width:0%"></div></div></div>
+        <div class="stat"><div class="label">Disk</div><div class="value" id="diskVal">--%</div><div class="bar"><div class="bar-fill disk" id="diskBar" style="width:0%"></div></div></div>
+        <div class="stat"><div class="label">Uptime</div><div class="value" id="uptimeVal" style="font-size:18px;">--</div><div class="sub" id="osVal">--</div></div>
+        <div class="stat"><div class="label">Net Sent</div><div class="value" id="netSent" style="font-size:18px;">--</div><div class="sub">MB sent</div></div>
+        <div class="stat"><div class="label">Net Recv</div><div class="value" id="netRecv" style="font-size:18px;">--</div><div class="sub">MB received</div></div>
+    </div>
+
+    <!-- Dashboard Grid -->
+    <div class="grid">
+
+        <!-- Screenshot - Full Width -->
+        <div class="card full-width">
+            <div class="card-header">
+                <h3><i class="fas fa-camera"></i> Live Screenshot</h3>
+                <span style="font-size:11px;color:#64748b;">Auto-updates every 8s</span>
+            </div>
+            <div class="card-body">
+                <div id="screenshotContainer">
+                    <div class="ss-err"><i class="fas fa-spinner fa-spin"></i>Loading...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Active Window -->
+        <div class="card">
+            <div class="card-header"><h3><i class="fas fa-window-maximize"></i> Active Window</h3></div>
+            <div class="card-body">
+                <div class="active-win" id="activeWindow">--</div>
+                <div style="font-size:12px;color:#64748b;margin-top:6px;" id="activeTime">--</div>
+            </div>
+        </div>
+
+        <!-- Remote Terminal -->
+        <div class="card">
+            <div class="card-header"><h3><i class="fas fa-terminal"></i> Remote Terminal</h3></div>
+            <div class="card-body terminal">
+                <div class="cmd-row">
+                    <input type="text" id="cmdInput" placeholder="Type command... e.g. ls ~/Desktop" 
+                           onkeypress="if(event.key==='Enter') runCommand()" autocomplete="off" spellcheck="false" />
+                    <button onclick="runCommand()"><i class="fas fa-play"></i> Run</button>
+                </div>
+                <div id="cmdOutput" class="cmd-output">$ ready...</div>
+            </div>
+        </div>
+
+        <!-- Browser History -->
+        <div class="card">
+            <div class="card-header">
+                <h3><i class="fas fa-globe"></i> Browser History</h3>
+                <span style="font-size:11px;color:#64748b;" id="historyCount"></span>
+            </div>
+            <div class="card-body" style="max-height:320px;overflow-y:auto;">
+                <ul class="item-list" id="historyList">
+                    <li style="color:#64748b;">Loading...</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Running Processes -->
+        <div class="card">
+            <div class="card-header">
+                <h3><i class="fas fa-tasks"></i> Running Processes</h3>
+                <span style="font-size:11px;color:#64748b;" id="procCount"></span>
+            </div>
+            <div class="card-body" style="max-height:320px;overflow-y:auto;">
+                <table class="proc-table" id="procTable">
+                    <tr><th>PID</th><th>Name</th><th>CPU%</th><th>Mem%</th></tr>
+                </table>
+            </div>
+        </div>
+
+        <!-- Recent Files -->
+        <div class="card">
+            <div class="card-header"><h3><i class="fas fa-file-alt"></i> Recent Files</h3></div>
+            <div class="card-body" style="max-height:280px;overflow-y:auto;">
+                <div class="file-list" id="fileList">Loading...</div>
+            </div>
+        </div>
+
+        <!-- Network Connections -->
+        <div class="card">
+            <div class="card-header"><h3><i class="fas fa-network-wired"></i> Network Connections</h3></div>
+            <div class="card-body" style="max-height:280px;overflow-y:auto;">
+                <table class="conn-table" id="connTable">
+                    <tr><th>Local</th><th>Remote</th></tr>
+                </table>
+            </div>
+        </div>
+
+        <!-- Installed Apps -->
+        <div class="card full-width">
+            <div class="card-header"><h3><i class="fas fa-cube"></i> Installed Apps</h3></div>
+            <div class="card-body">
+                <div id="appsList">Loading...</div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<!-- ============= JAVASCRIPT ============= -->
+<script>
+let isRefreshing = false;
+
+// Copy dashboard URL to clipboard
+function copyURL() {
+    const ip = document.getElementById('ipDisplay').textContent;
+    const url = `http://${ip}:5000`;
+    navigator.clipboard.writeText(url).then(() => {
+        const badge = document.getElementById('ipBadge');
+        badge.style.borderColor = '#4ade80';
+        setTimeout(() => badge.style.borderColor = '#334155', 2000);
+    });
+}
+
+// Update screenshot
+function updateScreenshot() {
+    const container = document.getElementById('screenshotContainer');
+    const img = new Image();
+    img.onload = () => {
+        img.className = 'screenshot';
+        container.innerHTML = '';
+        container.appendChild(img);
+    };
+    img.onerror = () => {
+        container.innerHTML = `<div class="ss-err">
+            <i class="fas fa-camera-slash"></i>
+            Screenshot unavailable<br>
+            <small style="font-size:11px;margin-top:6px;display:block;">
+                Grant Screen Recording permission:<br>
+                System Settings → Privacy & Security → Screen Recording
+            </small>
+        </div>`;
+    };
+    img.src = '/api/screenshot?t=' + Date.now();
+}
+
+// Render history list
+function renderHistory(data) {
+    if (!data || data.length === 0) return '<li style="color:#64748b;">No history found</li>';
+    return data.slice(0, 30).map(h => {
+        const cls = h.browser.toLowerCase();
+        const title = (h.title || h.url || '').substring(0, 60);
+        return `<li><span class="badge ${cls}">${h.browser}</span><span title="${h.url}">${title}</span></li>`;
+    }).join('');
+}
+
+// Render processes table
+function renderProcesses(data) {
+    if (!data || data.length === 0) return '<tr><td colspan="4" style="color:#64748b;padding:8px;">No processes</td></tr>';
+    const header = '<tr><th>PID</th><th>Name</th><th>CPU%</th><th>Mem%</th></tr>';
+    const rows = data.slice(0, 30).map(p => {
+        const cpuClass = p.cpu > 10 ? 'cpu-high' : p.cpu > 2 ? 'cpu-med' : 'cpu-low';
+        return `<tr>
+            <td style="color:#64748b">${p.pid}</td>
+            <td>${(p.name||'').substring(0,30)}</td>
+            <td class="${cpuClass}">${p.cpu}</td>
+            <td style="color:#a78bfa">${p.mem}</td>
+        </tr>`;
+    }).join('');
+    return header + rows;
+}
+
+// Render recent files
+function renderFiles(data) {
+    if (!data || data.length === 0) return '<div style="color:#64748b;font-size:12px;">No recent files</div>';
+    return data.slice(0, 25).map(f => {
+        const short = f.replace(/^\/Users\/[^\/]+\//, '~/');
+        return `<div class="file-item" title="${f}">${short}</div>`;
+    }).join('');
+}
+
+// Render connections
+function renderConnections(data) {
+    if (!data || !data.connections || data.connections.length === 0)
+        return '<tr><td colspan="2" style="color:#64748b;padding:8px;">No active connections</td></tr>';
+    const header = '<tr><th>Local</th><th>Remote</th></tr>';
+    const rows = data.connections.slice(0, 15).map(c =>
+        `<tr><td>${c.local}</td><td>${c.remote}</td></tr>`
+    ).join('');
+    return header + rows;
+}
+
+// Main refresh
+async function refreshAll() {
+    if (isRefreshing) return;
+    isRefreshing = true;
+    const icon = document.getElementById('refreshIcon');
+    icon.classList.add('fa-spin');
+
+    try {
+        // Fire all requests in parallel
+        const [info, active, history, apps, procs, files, net] = await Promise.all([
+            fetch('/api/info').then(r => r.json()).catch(() => ({})),
+            fetch('/api/active_window').then(r => r.json()).catch(() => ({})),
+            fetch('/api/history').then(r => r.json()).catch(() => []),
+            fetch('/api/apps').then(r => r.json()).catch(() => []),
+            fetch('/api/processes').then(r => r.json()).catch(() => []),
+            fetch('/api/recent_files').then(r => r.json()).catch(() => []),
+            fetch('/api/network').then(r => r.json()).catch(() => ({}))
+        ]);
+
+        // --- Top bar ---
+        document.getElementById('hostnameDisplay').textContent = info.hostname || '--';
+        document.getElementById('ipDisplay').textContent = info.ip || net.ip || 'localhost';
+
+        // --- Stats ---
+        if (info.cpu_percent !== undefined) {
+            document.getElementById('cpuVal').textContent = info.cpu_percent + '%';
+            document.getElementById('cpuBar').style.width = info.cpu_percent + '%';
+        }
+        if (info.memory_percent !== undefined) {
+            document.getElementById('memVal').textContent = info.memory_percent + '%';
+            document.getElementById('memBar').style.width = info.memory_percent + '%';
+            document.getElementById('memVal').title = `${info.memory_used}/${info.memory_total} GB`;
+        }
+        if (info.disk_percent !== undefined) {
+            document.getElementById('diskVal').textContent = info.disk_percent + '%';
+            document.getElementById('diskBar').style.width = info.disk_percent + '%';
+        }
+        if (info.uptime) document.getElementById('uptimeVal').textContent = info.uptime;
+        if (info.os) document.getElementById('osVal').textContent = info.os;
+        if (net.bytes_sent !== undefined) document.getElementById('netSent').textContent = net.bytes_sent;
+        if (net.bytes_recv !== undefined) document.getElementById('netRecv').textContent = net.bytes_recv;
+
+        // --- Active Window ---
+        document.getElementById('activeWindow').textContent = active.active || '--';
+        document.getElementById('activeTime').textContent = 'As of ' + new Date().toLocaleTimeString();
+
+        // --- Screenshot ---
+        updateScreenshot();
+
+        // --- History ---
+        document.getElementById('historyList').innerHTML = renderHistory(history);
+        if (history.length) document.getElementById('historyCount').textContent = history.length + ' entries';
+
+        // --- Processes ---
+        document.getElementById('procTable').innerHTML = renderProcesses(procs);
+        if (procs.length) document.getElementById('procCount').textContent = procs.length + ' processes';
+
+        // --- Files ---
+        document.getElementById('fileList').innerHTML = renderFiles(files);
+
+        // --- Network ---
+        document.getElementById('connTable').innerHTML = renderConnections(net);
+
+        // --- Apps ---
+        document.getElementById('appsList').innerHTML = apps.length
+            ? apps.map(a => `<span class="chip">${a}</span>`).join('')
+            : '<span style="color:#64748b">No apps found</span>';
+
+        // --- Timestamp ---
+        document.getElementById('lastUpdate').textContent = 'Updated: ' + new Date().toLocaleTimeString();
+
+    } catch(e) {
+        console.error('Refresh error:', e);
+    }
+
+    icon.classList.remove('fa-spin');
+    isRefreshing = false;
+}
+
+// Run remote command
+async function runCommand() {
+    const input = document.getElementById('cmdInput');
+    const output = document.getElementById('cmdOutput');
+    const cmd = input.value.trim();
+    if (!cmd) return;
+
+    output.textContent = '$ ' + cmd + '\nRunning...';
+    try {
+        const res = await fetch('/api/command', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ command: cmd })
+        });
+        const data = await res.json();
+        output.textContent = '$ ' + cmd + '\n' + (data.success ? data.output : '❌ Error: ' + data.error);
+    } catch(e) {
+        output.textContent = '$ ' + cmd + '\n❌ Network error: ' + e.message;
+    }
+    output.scrollTop = output.scrollHeight;
+}
+
+// Auto-refresh every 8 seconds
+setInterval(refreshAll, 8000);
+
+// Initial load
+refreshAll();
+</script>
+
+</body>
+</html>

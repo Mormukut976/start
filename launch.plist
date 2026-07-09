@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.employeemonitor.dashboard</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/python3</string>
+        <string>/Library/Application Support/EmployeeMonitor/monitor.py</string>
+        <string>--server</string>
+        <string>http://10.10.10.122:5000</string>
+    </array>
+
+    <!-- Start automatically when Mac boots -->
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!-- Restart if it crashes -->
+    <key>KeepAlive</key>
+    <true/>
+
+    <!-- Wait 10 seconds before restart on crash -->
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+
+    <!-- Logs -->
+    <key>StandardOutPath</key>
+    <string>/var/log/employeemonitor.log</string>
+    <key>StandardErrorPath</key>
+    <string>/var/log/employeemonitor.err</string>
+
+    <!-- Run as root so all permissions work -->
+    <key>UserName</key>
+    <string>root</string>
+</dict>
+</plist>

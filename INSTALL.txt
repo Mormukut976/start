@@ -1,0 +1,119 @@
+═══════════════════════════════════════════════════════════
+   🖥️  EMPLOYEEMONITOR — QUICK START GUIDE
+═══════════════════════════════════════════════════════════
+
+✅ Package created: EmployeeMonitor-Installer.pkg (12KB)
+
+═══════════════════════════════════════════════════════════
+   📦 INSTALLATION (Target Mac Mini pe)
+═══════════════════════════════════════════════════════════
+
+Step 1️⃣: Package Copy Karo
+   • USB / AirDrop / Email se .pkg file Mac Mini pe copy karo
+
+Step 2️⃣: Install Karo
+   • Double-click: EmployeeMonitor-Installer.pkg
+   • Continue → Install
+   • Admin password daalo
+
+Step 3️⃣: Permissions Deni Hain ⚠️  (ZAROORI!)
+   
+   System Settings mein jao:
+   
+   ┌────────────────────────────────────────────────┐
+   │  Privacy & Security → Screen Recording         │
+   │  ✓ python3                                     │
+   └────────────────────────────────────────────────┘
+   
+   ┌────────────────────────────────────────────────┐
+   │  Privacy & Security → Accessibility            │
+   │  ✓ python3                                     │
+   └────────────────────────────────────────────────┘
+   
+   ┌────────────────────────────────────────────────┐
+   │  Privacy & Security → Full Disk Access         │
+   │  ✓ python3                                     │
+   └────────────────────────────────────────────────┘
+
+   Tip: '+' button dabao → /usr/bin/python3 select karo
+
+Step 4️⃣: Dashboard Kholo 🌐
+   
+   Mac Mini ka IP pata karo:
+     System Settings → Wi-Fi → Details → IP Address
+   
+   Phir kisi bhi device (laptop/phone) ke browser mein:
+   
+     http://192.168.x.x:5000
+   
+   Done! 🎉
+
+═══════════════════════════════════════════════════════════
+   📱 REMOTE ACCESS
+═══════════════════════════════════════════════════════════
+
+Same Wi-Fi se:
+   http://<mac-ip>:5000
+
+Bahar se (Internet):
+   • Router pe port forwarding: 5000 → Mac IP
+   • Ya ngrok use karo:
+       brew install ngrok
+       ngrok http 5000
+
+═══════════════════════════════════════════════════════════
+   🔧 CONTROL COMMANDS
+═══════════════════════════════════════════════════════════
+
+Status check:
+   launchctl list | grep employeemonitor
+
+Start:
+   sudo launchctl load /Library/LaunchDaemons/com.employeemonitor.dashboard.plist
+
+Stop:
+   sudo launchctl unload /Library/LaunchDaemons/com.employeemonitor.dashboard.plist
+
+Logs:
+   tail -f /var/log/employeemonitor.log
+   tail -f /var/log/employeemonitor.err
+
+Uninstall:
+   sudo launchctl unload /Library/LaunchDaemons/com.employeemonitor.dashboard.plist
+   sudo rm /Library/LaunchDaemons/com.employeemonitor.dashboard.plist
+   sudo rm -rf "/Library/Application Support/EmployeeMonitor"
+
+═══════════════════════════════════════════════════════════
+   🎯 FEATURES
+═══════════════════════════════════════════════════════════
+
+✓ Live Screenshot (8s refresh)
+✓ System Stats (CPU, RAM, Disk, Network)
+✓ Browser History (Safari, Chrome, Firefox)
+✓ Active Window
+✓ Running Processes
+✓ Recent Files
+✓ Network Connections
+✓ Remote Terminal (Run commands from dashboard!)
+
+═══════════════════════════════════════════════════════════
+   ❓ TROUBLESHOOTING
+═══════════════════════════════════════════════════════════
+
+Dashboard nahi khul rahi?
+   → Check: launchctl list | grep employeemonitor
+   → Check: sudo lsof -i :5000
+   → Manual run: python3 /Library/Application\ Support/EmployeeMonitor/monitor.py
+
+Screenshot blank?
+   → Permission grant karo: Screen Recording → python3 ✓
+
+Browser history blank?
+   → Permission grant karo: Full Disk Access → python3 ✓
+
+Boot pe start nahi ho raha?
+   → Run: sudo launchctl load -w /Library/LaunchDaemons/com.employeemonitor.dashboard.plist
+
+═══════════════════════════════════════════════════════════
+
+Bas itna hi! Ab kahin se bhi monitor karo 🚀
