@@ -73,9 +73,35 @@ app = Flask(__name__, template_folder=TEMPLATE_DIR)
 # ==================== MACHINE ID ====================
 def get_machine_id():
     hostname = platform.node().replace(' ', '_').lower()
-    # Remove special chars
     import re
     hostname = re.sub(r'[^a-z0-9_\-]', '', hostname)
+    hostname = hostname or 'mac'
+    
+    hardware_uuid = None
+    try:
+        output = subprocess.check_output(
+            ["ioreg", "-rd1", "-c", "IOPlatformExpertDevice"],
+            stderr=subprocess.DEVNULL, timeout=3
+        ).decode()
+        for line in output.split('\n'):
+            if "IOPlatformUUID" in line:
+                hardware_uuid = line.split("=")[1].strip().strip('"').lower()
+                break
+    except:
+        pass
+        
+    if hardware_uuid:
+        suffix = hardware_uuid.split('-')[-1]
+        return f"{hostname}_{suffix}"
+        
+    try:
+        import uuid
+        mac = uuid.getnode()
+        mac_hex = f"{mac:012x}"[-6:]
+        return f"{hostname}_{mac_hex}"
+    except:
+        pass
+        
     return hostname or 'unknown_mac'
 
 MACHINE_ID = get_machine_id()

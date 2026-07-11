@@ -208,7 +208,8 @@ def agent_command_poll():
     
     with command_lock:
         pending = command_queue.get(machine_id, {}).get('pending')
-        if pending:
+        if pending and not pending.get('delivered', False):
+            pending['delivered'] = True
             return jsonify({"has_command": True, "command_id": pending['id'], "command": pending['command']})
     
     return jsonify({"has_command": False})
@@ -408,6 +409,8 @@ def api_command_status(machine_id, command_id):
         # Still pending?
         pending = queue.get('pending')
         if pending and pending.get('id') == command_id:
+            if pending.get('delivered'):
+                return jsonify({"ready": False, "status": "running", "message": "Command is executing on the agent..."})
             return jsonify({"ready": False, "status": "waiting", "message": "Agent hasn't picked up command yet..."})
     
     return jsonify({"ready": False, "status": "unknown", "message": "Command not found"})
