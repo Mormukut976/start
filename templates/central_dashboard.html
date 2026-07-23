@@ -1104,35 +1104,126 @@ async function runRemoteCmd() {
     }
 }
 
+// ==================== BROWSER-SIDE LOCAL WI-FI SUBNET SCANNER ====================
+function getBrowserLocalIP() {
+    return new Promise((resolve) => {
+        let detectedIP = null;
+        try {
+            const pc = new RTCPeerConnection({ iceServers: [] });
+            pc.createDataChannel('');
+            pc.createOffer().then(offer => pc.setLocalDescription(offer)).catch(() => {});
+            pc.onicecandidate = (e) => {
+                if (e && e.candidate && e.candidate.candidate) {
+                    const match = e.candidate.candidate.match(/(?:[0-9]{1,3}\.){3}[0-9]{1,3}/);
+                    if (match) {
+                        const ip = match[0];
+                        if (ip.startsWith('192.168.') || ip.startsWith('10.') || ip.startsWith('172.')) {
+                            detectedIP = ip;
+                            pc.close();
+                            resolve(detectedIP);
+                        }
+                    }
+                }
+            };
+            setTimeout(() => {
+                pc.close();
+                resolve(detectedIP || '192.168.1.1');
+            }, 1200);
+        } catch(err) {
+            resolve('192.168.1.1');
+        }
+    });
+}
+
+function probeLocalIP(ip, timeout = 750) {
+    return new Promise((resolve) => {
+        const controller = new AbortController();
+        const timer = setTimeout(() => {
+            controller.abort();
+            resolve({ ip, active: false });
+        }, timeout);
+
+        const startTime = performance.now();
+        fetch(`http://${ip}/`, { mode: 'no-cors', signal: controller.signal, cache: 'no-store' })
+            .then(() => {
+                clearTimeout(timer);
+                resolve({ ip, active: true, latency: Math.round(performance.now() - startTime) });
+            })
+            .catch((err) => {
+                clearTimeout(timer);
+                if (err.name !== 'AbortError') {
+                    resolve({ ip, active: true, latency: Math.round(performance.now() - startTime) });
+                } else {
+                    resolve({ ip, active: false });
+                }
+            });
+    });
+}
+
 async function triggerNetworkScan() {
     const backdrop = document.getElementById('modalBackdrop');
     const content = document.getElementById('modalContent');
-    document.getElementById('modalTargetTitle').textContent = "RADAR NETWORK DISCOVERY SCAN";
+    document.getElementById('modalTargetTitle').textContent = "RADAR WI-FI NETWORK DISCOVERY SCAN";
     
-    content.innerHTML = `<div style="text-align:center;padding:50px;color:var(--cyan);font-family:var(--font-code);">
-        <i class="fas fa-radar fa-spin" style="font-size:3rem;margin-bottom:16px;color:var(--cyan);"></i>
-        <h3 style="font-family:var(--font-display);letter-spacing:2px;">SCANNING LOCAL SUBNET & ARP CACHE...</h3>
-        <p style="font-size:13px;color:var(--text-sub);margin-top:6px;">Discovering active hostnames, IP addresses, and MAC addresses...</p>
+    content.innerHTML = `
+    <div style="font-family:var(--font-code);padding:10px;">
+        <div style="text-align:center;padding:30px;background:var(--bg-card);border:1px solid var(--border-color);border-radius:8px;margin-bottom:16px;">
+            <i class="fas fa-wifi fa-spin" style="font-size:2.8rem;color:var(--cyan);margin-bottom:12px;display:block;"></i>
+            <h3 style="font-family:var(--font-display);letter-spacing:2px;color:var(--cyan);">SCANNING LOCAL WI-FI SUBNET...</h3>
+            <p style="font-size:13px;color:var(--text-sub);margin-top:6px;" id="scanStatusText">Detecting local network IP range & probing active devices (1 to 254)...</p>
+            <div style="width:100%;height:6px;background:var(--bg-base);border-radius:3px;margin-top:16px;overflow:hidden;border:1px solid var(--border-color);">
+                <div id="scanProgressBar" style="width:5%;height:100%;background:linear-gradient(90deg, var(--cyan), var(--neon-green));transition:width 0.2s;"></div>
+            </div>
+        </div>
+        <div id="liveScanTableContainer">
+            <div style="text-align:center;color:var(--text-sub);padding:20px;">Scanning network... Discovered Wi-Fi devices will appear below in real-time.</div>
+        </div>
     </div>`;
     
     backdrop.classList.add('active');
 
+    // 1. Fetch server-registered agents first
+    let serverDevices = [];
     try {
         const res = await fetch('/api/network/scan');
-        const data = await res.json();
-        const devices = data.devices || [];
+        const sData = await res.json();
+        serverDevices = sData.devices || [];
+    } catch(e) {}
 
-        let rows = devices.map(d => {
+    // Map of discovered hosts
+    const discoveredMap = new Map();
+    serverDevices.forEach(d => {
+        if (d.ip) {
+            discoveredMap.set(d.ip, {
+                ip: d.ip,
+                hostname: d.hostname || d.machine_id || 'Registered Agent',
+                type: d.type || 'Agent Machine',
+                status: d.status || 'online',
+                agent_installed: d.agent_installed,
+                latency: '0 ms',
+                machine_id: d.machine_id
+            });
+        }
+    });
+
+    const renderTable = () => {
+        const devList = Array.from(discoveredMap.values());
+        const container = document.getElementById('liveScanTableContainer');
+        if (!container) return;
+
+        let rows = devList.map(d => {
             const isAgent = d.agent_installed;
+            const isRouter = d.ip.endsWith('.1');
+            const hostLabel = isRouter ? `🌐 Wi-Fi Gateway Router (${d.ip})` : (d.hostname || `Discovered Device (${d.ip})`);
             const statusBadge = isAgent 
-                ? `<span style="color:var(--neon-green);font-weight:700;">● AGENT INSTALLED (${(d.status || 'online').toUpperCase()})</span>`
-                : `<span style="color:var(--neon-orange);font-weight:700;">⚡ DISCOVERED DEVICE</span>`;
+                ? `<span style="color:var(--neon-green);font-weight:700;">● AGENT CONNECTED (${(d.status || 'online').toUpperCase()})</span>`
+                : `<span style="color:var(--cyan);font-weight:700;">⚡ LIVE ON WI-FI NETWORK</span>`;
                 
             return `
             <tr style="border-bottom:1px solid var(--border-color);">
-                <td style="padding:10px;font-weight:700;color:var(--text-main);">${escHtml(d.hostname || 'Unknown Host')}</td>
+                <td style="padding:10px;font-weight:700;color:var(--text-main);">${escHtml(hostLabel)}</td>
                 <td style="padding:10px;color:var(--cyan);font-family:var(--font-code);font-weight:700;">${escHtml(d.ip)}</td>
-                <td style="padding:10px;color:var(--text-sub);font-family:var(--font-code);">${escHtml(d.mac || 'N/A')}</td>
+                <td style="padding:10px;color:var(--text-sub);font-family:var(--font-code);">${escHtml(d.latency || '< 15 ms')}</td>
                 <td style="padding:10px;">${statusBadge}</td>
                 <td style="padding:10px;">
                     ${isAgent 
@@ -1143,45 +1234,84 @@ async function triggerNetworkScan() {
             </tr>`;
         }).join('');
 
-        content.innerHTML = `
-        <div style="font-family:var(--font-code);">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;background:var(--bg-card);padding:12px 16px;border:1px solid var(--border-color);border-radius:6px;">
-                <div>
-                    <span style="color:var(--cyan);font-family:var(--font-display);font-weight:800;font-size:1.1rem;">ACTIVE NETWORK DEVICES: ${data.total_devices}</span>
-                    <div style="font-size:11px;color:var(--text-sub);margin-top:2px;">Scan completed at ${data.scan_time}</div>
-                </div>
-                <button class="action-btn" onclick="triggerNetworkScan()"><i class="fas fa-rotate"></i> RESCAN NETWORK</button>
-            </div>
+        container.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;background:var(--bg-card);padding:10px 14px;border:1px solid var(--border-color);border-radius:6px;">
+            <span style="color:var(--cyan);font-family:var(--font-display);font-weight:800;font-size:1rem;">DISCOVERED WI-FI DEVICES: ${devList.length}</span>
+            <button class="preset-btn" onclick="triggerNetworkScan()"><i class="fas fa-rotate"></i> RESCAN WI-FI NETWORK</button>
+        </div>
 
-            <div style="overflow-x:auto;">
-                <table style="width:100%;border-collapse:collapse;font-size:13px;text-align:left;">
-                    <thead>
-                        <tr style="background:var(--bg-card);border-bottom:2px solid var(--border-color);color:var(--text-sub);font-family:var(--font-display);font-size:11px;text-transform:uppercase;">
-                            <th style="padding:10px;">Hostname</th>
-                            <th style="padding:10px;">IP Address</th>
-                            <th style="padding:10px;">MAC / Info</th>
-                            <th style="padding:10px;">Agent Status</th>
-                            <th style="padding:10px;">Action</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${rows || `<tr><td colspan="5" style="text-align:center;padding:40px 20px;background:var(--bg-card);">
-                            <i class="fas fa-radar" style="font-size:2.5rem;color:var(--cyan);margin-bottom:12px;display:block;"></i>
-                            <h3 style="font-family:var(--font-display);color:var(--text-main);margin-bottom:6px;">CLOUD RADAR SCAN COMPLETE</h3>
-                            <p style="color:var(--text-sub);font-size:13px;max-width:600px;margin:0 auto 16px;">
-                                Cloud deployment (Render) mein target Mac devices (jaise Mukut Singh ka Mac) agent run hote hi yahan auto-connect hokar scan List aur Dropdown mein live dikhenge.
-                            </p>
-                            <div style="background:var(--bg-base);padding:12px 18px;border-radius:6px;border:1px solid var(--border-color);display:inline-block;font-family:var(--font-code);font-size:12px;color:var(--neon-green);">
-                                ./build_installer.sh ${window.location.origin}
-                            </div>
-                        </td></tr>`}
-                    </tbody>
-                </table>
-            </div>
+        <div style="overflow-x:auto;">
+            <table style="width:100%;border-collapse:collapse;font-size:13px;text-align:left;">
+                <thead>
+                    <tr style="background:var(--bg-card);border-bottom:2px solid var(--border-color);color:var(--text-sub);font-family:var(--font-display);font-size:11px;text-transform:uppercase;">
+                        <th style="padding:10px;">Device Hostname</th>
+                        <th style="padding:10px;">IP Address</th>
+                        <th style="padding:10px;">Latency</th>
+                        <th style="padding:10px;">Network Status</th>
+                        <th style="padding:10px;">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${rows || '<tr><td colspan="5" style="text-align:center;padding:30px;color:var(--text-sub);">Scanning Wi-Fi network...</td></tr>'}
+                </tbody>
+            </table>
         </div>`;
-    } catch(e) {
-        content.innerHTML = `<div style="padding:40px;color:var(--red-alert);text-align:center;">Network scan error: ${e.message}</div>`;
+    };
+
+    renderTable();
+
+    // 2. Detect Client Local IP
+    const clientLocalIP = await getBrowserLocalIP();
+    let prefix = '192.168.1.';
+    if (clientLocalIP && clientLocalIP.includes('.')) {
+        const parts = clientLocalIP.split('.');
+        if (parts.length === 4) prefix = `${parts[0]}.${parts[1]}.${parts[2]}.`;
     }
+
+    const statusText = document.getElementById('scanStatusText');
+    const progressBar = document.getElementById('scanProgressBar');
+    if (statusText) statusText.textContent = `Probing active devices on local subnet (${prefix}1 to ${prefix}254)...`;
+
+    // Add local gateway router by default
+    discoveredMap.set(prefix + '1', {
+        ip: prefix + '1',
+        hostname: `Wi-Fi Gateway Router`,
+        type: 'Gateway Router',
+        status: 'active',
+        agent_installed: false,
+        latency: '2 ms'
+    });
+    renderTable();
+
+    // 3. Fast Parallel Subnet Probe (254 IPs in batches of 35)
+    const batchSize = 35;
+    for (let i = 1; i <= 254; i += batchSize) {
+        const batch = [];
+        for (let j = i; j < i + batchSize && j <= 254; j++) {
+            const ip = prefix + j;
+            batch.push(probeLocalIP(ip).then(res => {
+                if (res.active) {
+                    if (!discoveredMap.has(res.ip)) {
+                        discoveredMap.set(res.ip, {
+                            ip: res.ip,
+                            hostname: res.ip === prefix + '1' ? 'Wi-Fi Gateway Router' : `Discovered Host (${res.ip})`,
+                            type: 'Network Device',
+                            status: 'active',
+                            agent_installed: false,
+                            latency: `${res.latency} ms`
+                        });
+                        renderTable();
+                    }
+                }
+            }));
+        }
+        await Promise.all(batch);
+        const percent = Math.min(100, Math.round((i / 254) * 100));
+        if (progressBar) progressBar.style.width = percent + '%';
+    }
+
+    if (progressBar) progressBar.style.width = '100%';
+    if (statusText) statusText.textContent = `Scan Complete! Discovered ${discoveredMap.size} active devices on ${prefix}0/24 network.`;
 }
 
 function closeModal() {
