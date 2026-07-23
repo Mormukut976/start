@@ -362,6 +362,59 @@ def api_stats():
         'offline_machines': total - online
     })
 
+@app.route('/api/network/scan')
+def api_network_scan():
+    """Scan ARP table and network to discover active devices, hostnames, and IP addresses"""
+    devices = []
+    seen_ips = set()
+    
+    # 1. First include all registered agent machines
+    with machines_lock:
+        for mid, mdata in machines_data.items():
+            ip = mdata.get('ip')
+            if ip and ip != 'unknown':
+                seen_ips.add(ip)
+                devices.append({
+                    'ip': ip,
+                    'hostname': mdata.get('hostname', mid),
+                    'mac': 'Registered Agent',
+                    'type': 'Agent Machine',
+                    'agent_installed': True,
+                    'status': _get_machine_status_unlocked(mid),
+                    'machine_id': mid
+                })
+                
+    # 2. Parse ARP cache table
+    try:
+        import subprocess, re
+        arp_out = subprocess.check_output(['arp', '-a'], stderr=subprocess.DEVNULL, timeout=5).decode(errors='replace')
+        for line in arp_out.splitlines():
+            match = re.search(r'([^\s\(\)]+)?\s*\(([\d\.]+)\)\s*at\s*([a-fA-F0-9:]+)', line)
+            if match:
+                h_name = match.group(1) or 'Unknown Device'
+                if h_name == '?': h_name = 'Unknown Device'
+                ip_addr = match.group(2)
+                mac_addr = match.group(3)
+                
+                if ip_addr not in seen_ips and not ip_addr.startswith('255.') and not ip_addr.startswith('224.'):
+                    seen_ips.add(ip_addr)
+                    devices.append({
+                        'ip': ip_addr,
+                        'hostname': h_name,
+                        'mac': mac_addr,
+                        'type': 'Network Device',
+                        'agent_installed': False,
+                        'status': 'discovered'
+                    })
+    except Exception as e:
+        log.debug(f"ARP scan exception: {e}")
+        
+    return jsonify({
+        'total_devices': len(devices),
+        'devices': devices,
+        'scan_time': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    })
+
 # ==================== CLOUD-COMPATIBLE COMMAND SYSTEM ====================
 
 @app.route('/api/machine/<machine_id>/command', methods=['POST'])
