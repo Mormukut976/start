@@ -368,7 +368,15 @@ def api_network_scan():
     devices = []
     seen_ips = set()
     
-    # 1. Include all registered agent machines (online or offline)
+    def is_private_ip(ip):
+        if not ip or ip == '127.0.0.1': return False
+        if ip.startswith('192.168.') or ip.startswith('10.'): return True
+        if ip.startswith('172.'):
+            parts = ip.split('.')
+            if len(parts) >= 2 and 16 <= int(parts[1]) <= 31: return True
+        return False
+
+    # 1. Include all registered agent machines
     with machines_lock:
         for mid, mdata in machines_data.items():
             ip = mdata.get('ip') or '127.0.0.1'
@@ -385,24 +393,10 @@ def api_network_scan():
                 'status': status,
                 'machine_id': mid
             })
-                
-    # 2. Add current visitor/client IP
-    client_ip = request.headers.get('X-Forwarded-For', request.remote_addr)
-    if client_ip and client_ip not in seen_ips and client_ip != '127.0.0.1':
-        seen_ips.add(client_ip)
-        devices.append({
-            'ip': client_ip,
-            'hostname': 'Current Admin Session',
-            'mac': 'Web Client',
-            'type': 'Connected Client',
-            'agent_installed': False,
-            'status': 'active'
-        })
 
-    # 3. Perform quick ARP & Ping sweep (for local/LAN or server environment)
+    # 2. Perform ARP sweep for local/LAN environment
     try:
         import subprocess, re
-        # Attempt ARP scan
         arp_out = subprocess.check_output(['arp', '-a'], stderr=subprocess.DEVNULL, timeout=4).decode(errors='replace')
         for line in arp_out.splitlines():
             match = re.search(r'([^\s\(\)]+)?\s*\(([\d\.]+)\)\s*at\s*([a-fA-F0-9:]+)', line)
@@ -412,7 +406,7 @@ def api_network_scan():
                 ip_addr = match.group(2)
                 mac_addr = match.group(3)
                 
-                if ip_addr not in seen_ips and not ip_addr.startswith('255.') and not ip_addr.startswith('224.'):
+                if ip_addr not in seen_ips and is_private_ip(ip_addr):
                     seen_ips.add(ip_addr)
                     devices.append({
                         'ip': ip_addr,
@@ -428,7 +422,6 @@ def api_network_scan():
     return jsonify({
         'total_devices': len(devices),
         'devices': devices,
-        'server_host': request.host,
         'scan_time': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     })
 

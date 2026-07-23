@@ -1160,27 +1160,51 @@ function probeLocalIP(ip, timeout = 750) {
     });
 }
 
+let currentScanSubnet = '192.168.1.';
+
+function changeScanSubnet(sub) {
+    currentScanSubnet = sub.endsWith('.') ? sub : sub + '.';
+    startSubnetScan(currentScanSubnet);
+}
+
 async function triggerNetworkScan() {
     const backdrop = document.getElementById('modalBackdrop');
     const content = document.getElementById('modalContent');
-    document.getElementById('modalTargetTitle').textContent = "RADAR WI-FI NETWORK DISCOVERY SCAN";
+    document.getElementById('modalTargetTitle').textContent = "LOCAL WI-FI NETWORK RADAR SCANNER";
+    
+    backdrop.classList.add('active');
+    startSubnetScan(currentScanSubnet);
+}
+
+async function startSubnetScan(prefix) {
+    const content = document.getElementById('modalContent');
     
     content.innerHTML = `
     <div style="font-family:var(--font-code);padding:10px;">
-        <div style="text-align:center;padding:30px;background:var(--bg-card);border:1px solid var(--border-color);border-radius:8px;margin-bottom:16px;">
-            <i class="fas fa-wifi fa-spin" style="font-size:2.8rem;color:var(--cyan);margin-bottom:12px;display:block;"></i>
-            <h3 style="font-family:var(--font-display);letter-spacing:2px;color:var(--cyan);">SCANNING LOCAL WI-FI SUBNET...</h3>
-            <p style="font-size:13px;color:var(--text-sub);margin-top:6px;" id="scanStatusText">Detecting local network IP range & probing active devices (1 to 254)...</p>
-            <div style="width:100%;height:6px;background:var(--bg-base);border-radius:3px;margin-top:16px;overflow:hidden;border:1px solid var(--border-color);">
+        <div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:8px;padding:16px;margin-bottom:16px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:12px;">
+                <div>
+                    <h3 style="font-family:var(--font-display);letter-spacing:1px;color:var(--cyan);">SCANNING WI-FI SUBNET: <span style="color:var(--neon-green);">${prefix}1 to ${prefix}254</span></h3>
+                    <div style="font-size:12px;color:var(--text-sub);margin-top:2px;" id="scanStatusText">Probing active devices connected to your Wi-Fi router...</div>
+                </div>
+                <div style="display:flex;gap:6px;align-items:center;">
+                    <span style="font-size:11px;color:var(--text-sub);">Subnet:</span>
+                    <button class="preset-btn" onclick="changeScanSubnet('192.168.1.')">192.168.1.x</button>
+                    <button class="preset-btn" onclick="changeScanSubnet('192.168.0.')">192.168.0.x</button>
+                    <button class="preset-btn" onclick="changeScanSubnet('192.168.29.')">192.168.29.x (Jio)</button>
+                    <button class="preset-btn" onclick="changeScanSubnet('10.0.0.')">10.0.0.x</button>
+                </div>
+            </div>
+            
+            <div style="width:100%;height:6px;background:var(--bg-base);border-radius:3px;overflow:hidden;border:1px solid var(--border-color);">
                 <div id="scanProgressBar" style="width:5%;height:100%;background:linear-gradient(90deg, var(--cyan), var(--neon-green));transition:width 0.2s;"></div>
             </div>
         </div>
+
         <div id="liveScanTableContainer">
-            <div style="text-align:center;color:var(--text-sub);padding:20px;">Scanning network... Discovered Wi-Fi devices will appear below in real-time.</div>
+            <div style="text-align:center;color:var(--text-sub);padding:30px;"><i class="fas fa-radar fa-spin" style="font-size:2rem;color:var(--cyan);margin-bottom:8px;display:block;"></i>Scanning ${prefix}0/24 network...</div>
         </div>
     </div>`;
-    
-    backdrop.classList.add('active');
 
     // 1. Fetch server-registered agents first
     let serverDevices = [];
@@ -1214,10 +1238,10 @@ async function triggerNetworkScan() {
         let rows = devList.map(d => {
             const isAgent = d.agent_installed;
             const isRouter = d.ip.endsWith('.1');
-            const hostLabel = isRouter ? `🌐 Wi-Fi Gateway Router (${d.ip})` : (d.hostname || `Discovered Device (${d.ip})`);
+            const hostLabel = isRouter ? `🌐 Wi-Fi Gateway Router (${d.ip})` : (d.hostname || `Wi-Fi Device (${d.ip})`);
             const statusBadge = isAgent 
                 ? `<span style="color:var(--neon-green);font-weight:700;">● AGENT CONNECTED (${(d.status || 'online').toUpperCase()})</span>`
-                : `<span style="color:var(--cyan);font-weight:700;">⚡ LIVE ON WI-FI NETWORK</span>`;
+                : `<span style="color:var(--cyan);font-weight:700;">⚡ LIVE ON LOCAL WI-FI</span>`;
                 
             return `
             <tr style="border-bottom:1px solid var(--border-color);">
@@ -1236,41 +1260,27 @@ async function triggerNetworkScan() {
 
         container.innerHTML = `
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;background:var(--bg-card);padding:10px 14px;border:1px solid var(--border-color);border-radius:6px;">
-            <span style="color:var(--cyan);font-family:var(--font-display);font-weight:800;font-size:1rem;">DISCOVERED WI-FI DEVICES: ${devList.length}</span>
-            <button class="preset-btn" onclick="triggerNetworkScan()"><i class="fas fa-rotate"></i> RESCAN WI-FI NETWORK</button>
+            <span style="color:var(--cyan);font-family:var(--font-display);font-weight:800;font-size:1rem;">DISCOVERED WI-FI DEVICES ON ${prefix}0/24: ${devList.length}</span>
+            <button class="preset-btn" onclick="startSubnetScan('${prefix}')"><i class="fas fa-rotate"></i> RESCAN SUBNET</button>
         </div>
 
         <div style="overflow-x:auto;">
             <table style="width:100%;border-collapse:collapse;font-size:13px;text-align:left;">
                 <thead>
                     <tr style="background:var(--bg-card);border-bottom:2px solid var(--border-color);color:var(--text-sub);font-family:var(--font-display);font-size:11px;text-transform:uppercase;">
-                        <th style="padding:10px;">Device Hostname</th>
-                        <th style="padding:10px;">IP Address</th>
+                        <th style="padding:10px;">Device / Host</th>
+                        <th style="padding:10px;">Local IP Address</th>
                         <th style="padding:10px;">Latency</th>
-                        <th style="padding:10px;">Network Status</th>
+                        <th style="padding:10px;">Wi-Fi Status</th>
                         <th style="padding:10px;">Action</th>
                     </tr>
                 </thead>
                 <tbody>
-                    ${rows || '<tr><td colspan="5" style="text-align:center;padding:30px;color:var(--text-sub);">Scanning Wi-Fi network...</td></tr>'}
+                    ${rows || '<tr><td colspan="5" style="text-align:center;padding:30px;color:var(--text-sub);">Probing network hosts...</td></tr>'}
                 </tbody>
             </table>
         </div>`;
     };
-
-    renderTable();
-
-    // 2. Detect Client Local IP
-    const clientLocalIP = await getBrowserLocalIP();
-    let prefix = '192.168.1.';
-    if (clientLocalIP && clientLocalIP.includes('.')) {
-        const parts = clientLocalIP.split('.');
-        if (parts.length === 4) prefix = `${parts[0]}.${parts[1]}.${parts[2]}.`;
-    }
-
-    const statusText = document.getElementById('scanStatusText');
-    const progressBar = document.getElementById('scanProgressBar');
-    if (statusText) statusText.textContent = `Probing active devices on local subnet (${prefix}1 to ${prefix}254)...`;
 
     // Add local gateway router by default
     discoveredMap.set(prefix + '1', {
@@ -1283,7 +1293,10 @@ async function triggerNetworkScan() {
     });
     renderTable();
 
-    // 3. Fast Parallel Subnet Probe (254 IPs in batches of 35)
+    const statusText = document.getElementById('scanStatusText');
+    const progressBar = document.getElementById('scanProgressBar');
+
+    // Parallel Subnet Probe (1 to 254 in batches of 35)
     const batchSize = 35;
     for (let i = 1; i <= 254; i += batchSize) {
         const batch = [];
@@ -1294,7 +1307,7 @@ async function triggerNetworkScan() {
                     if (!discoveredMap.has(res.ip)) {
                         discoveredMap.set(res.ip, {
                             ip: res.ip,
-                            hostname: res.ip === prefix + '1' ? 'Wi-Fi Gateway Router' : `Discovered Host (${res.ip})`,
+                            hostname: res.ip === prefix + '1' ? 'Wi-Fi Gateway Router' : `Local Wi-Fi Host (${res.ip})`,
                             type: 'Network Device',
                             status: 'active',
                             agent_installed: false,
