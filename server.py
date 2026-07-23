@@ -364,35 +364,51 @@ def api_stats():
 
 @app.route('/api/network/scan')
 def api_network_scan():
-    """Scan ARP table and network to discover active devices, hostnames, and IP addresses"""
+    """Scan ARP table, active connections & registered agents for network devices"""
     devices = []
     seen_ips = set()
     
-    # 1. First include all registered agent machines
+    # 1. Include all registered agent machines (online or offline)
     with machines_lock:
         for mid, mdata in machines_data.items():
-            ip = mdata.get('ip')
-            if ip and ip != 'unknown':
-                seen_ips.add(ip)
-                devices.append({
-                    'ip': ip,
-                    'hostname': mdata.get('hostname', mid),
-                    'mac': 'Registered Agent',
-                    'type': 'Agent Machine',
-                    'agent_installed': True,
-                    'status': _get_machine_status_unlocked(mid),
-                    'machine_id': mid
-                })
+            ip = mdata.get('ip') or '127.0.0.1'
+            hostname = mdata.get('hostname') or mid
+            status = _get_machine_status_unlocked(mid)
+            
+            seen_ips.add(ip)
+            devices.append({
+                'ip': ip,
+                'hostname': hostname,
+                'mac': f'Agent ID: {mid}',
+                'type': 'Agent Machine',
+                'agent_installed': True,
+                'status': status,
+                'machine_id': mid
+            })
                 
-    # 2. Parse ARP cache table
+    # 2. Add current visitor/client IP
+    client_ip = request.headers.get('X-Forwarded-For', request.remote_addr)
+    if client_ip and client_ip not in seen_ips and client_ip != '127.0.0.1':
+        seen_ips.add(client_ip)
+        devices.append({
+            'ip': client_ip,
+            'hostname': 'Current Admin Session',
+            'mac': 'Web Client',
+            'type': 'Connected Client',
+            'agent_installed': False,
+            'status': 'active'
+        })
+
+    # 3. Perform quick ARP & Ping sweep (for local/LAN or server environment)
     try:
         import subprocess, re
-        arp_out = subprocess.check_output(['arp', '-a'], stderr=subprocess.DEVNULL, timeout=5).decode(errors='replace')
+        # Attempt ARP scan
+        arp_out = subprocess.check_output(['arp', '-a'], stderr=subprocess.DEVNULL, timeout=4).decode(errors='replace')
         for line in arp_out.splitlines():
             match = re.search(r'([^\s\(\)]+)?\s*\(([\d\.]+)\)\s*at\s*([a-fA-F0-9:]+)', line)
             if match:
-                h_name = match.group(1) or 'Unknown Device'
-                if h_name == '?': h_name = 'Unknown Device'
+                h_name = match.group(1) or 'Discovered Device'
+                if h_name == '?': h_name = 'Discovered Device'
                 ip_addr = match.group(2)
                 mac_addr = match.group(3)
                 
@@ -412,6 +428,7 @@ def api_network_scan():
     return jsonify({
         'total_devices': len(devices),
         'devices': devices,
+        'server_host': request.host,
         'scan_time': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     })
 

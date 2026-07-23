@@ -1165,7 +1165,16 @@ async function triggerNetworkScan() {
                         </tr>
                     </thead>
                     <tbody>
-                        ${rows || '<tr><td colspan="5" style="text-align:center;padding:30px;color:var(--text-sub);">No devices discovered</td></tr>'}
+                        ${rows || `<tr><td colspan="5" style="text-align:center;padding:40px 20px;background:var(--bg-card);">
+                            <i class="fas fa-radar" style="font-size:2.5rem;color:var(--cyan);margin-bottom:12px;display:block;"></i>
+                            <h3 style="font-family:var(--font-display);color:var(--text-main);margin-bottom:6px;">CLOUD RADAR SCAN COMPLETE</h3>
+                            <p style="color:var(--text-sub);font-size:13px;max-width:600px;margin:0 auto 16px;">
+                                Cloud deployment (Render) mein target Mac devices (jaise Mukut Singh ka Mac) agent run hote hi yahan auto-connect hokar scan List aur Dropdown mein live dikhenge.
+                            </p>
+                            <div style="background:var(--bg-base);padding:12px 18px;border-radius:6px;border:1px solid var(--border-color);display:inline-block;font-family:var(--font-code);font-size:12px;color:var(--neon-green);">
+                                ./build_installer.sh ${window.location.origin}
+                            </div>
+                        </td></tr>`}
                     </tbody>
                 </table>
             </div>
