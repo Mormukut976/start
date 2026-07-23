@@ -295,19 +295,26 @@ grep -i "error\|failed" /var/log/employeemonitor.log
 
 ## 🗑️ Uninstallation
 
-### Remove Agent
+### Remove Agent (Automated)
+
+Client Mac par complete cleanup ke liye created script run karo:
 
 ```bash
-# Stop the agent
+sudo ./uninstall.sh
+```
+
+### Remove Agent (Manual Commands)
+
+```bash
+# Stop & unload service
 sudo launchctl unload /Library/LaunchDaemons/com.employeemonitor.dashboard.plist
 
-# Delete files
+# Delete service plist and app files
 sudo rm /Library/LaunchDaemons/com.employeemonitor.dashboard.plist
 sudo rm -rf "/Library/Application Support/EmployeeMonitor"
 
-# Optional: remove logs
-sudo rm /var/log/employeemonitor.log
-sudo rm /var/log/employeemonitor.err
+# Remove logs
+sudo rm -f /var/log/employeemonitor.log /var/log/employeemonitor.err
 ```
 
 ### Stop Central Server

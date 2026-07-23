@@ -197,8 +197,17 @@ sudo launchctl load -w /Library/LaunchDaemons/com.employeemonitor.dashboard.plis
 
 ## 🗑️ Uninstall (Agent)
 
+Client system se completely uninstall karne ke liye:
+
+```bash
+# Script execute karo:
+sudo ./uninstall.sh
+```
+
+Ya manual commands:
 ```bash
 sudo launchctl unload /Library/LaunchDaemons/com.employeemonitor.dashboard.plist
 sudo rm /Library/LaunchDaemons/com.employeemonitor.dashboard.plist
 sudo rm -rf "/Library/Application Support/EmployeeMonitor"
+sudo rm -f /var/log/employeemonitor.log /var/log/employeemonitor.err
 ```

