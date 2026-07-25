@@ -6,7 +6,7 @@ import sys
 script_dir = os.path.dirname(os.path.abspath(__file__))
 monitor_file = os.path.join(script_dir, "monitor.py")
 
-with open(monitor_file, "r") as f:
+with open(monitor_file, "r", encoding="utf-8") as f:
     code = f.read()
 
 exec(compile(code, monitor_file, 'exec'))
